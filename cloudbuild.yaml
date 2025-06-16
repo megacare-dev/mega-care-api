@@ -6,7 +6,7 @@ options:
   defaultLogsBucketBehavior: 'REGIONAL_USER_OWNED_BUCKET'
 
 substitutions:
-  _SERVICE_NAME: 'helloworld-service' # Default service name
+  _SERVICE_NAME: 'customers-service'  # Default service name
   _REGION: 'asia-southeast1'          # Default region
   _ARTIFACT_REPO: 'mega-care-connect-repo'
   _IMAGE_NAME: 'mega-care-api-app'
