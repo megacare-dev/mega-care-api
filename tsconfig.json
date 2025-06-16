@@ -10,6 +10,6 @@
     "skipLibCheck": true,                     /* Skip type checking all .d.ts files. */
     "resolveJsonModule": true                 /* Allows importing .json files */
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"], /* Defines the files to be included in compilation */
+  "include": ["src/**/*.ts"],                 /* Only include application source files for the main build */
   "exclude": ["node_modules", "dist"]
 }
