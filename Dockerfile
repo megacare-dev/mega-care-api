@@ -1,42 +1,48 @@
-# Use a builder image with Go installed
-FROM golang:1.24 as builder
+# Stage 1: Build the application
+FROM node:20-alpine AS builder
 
 # Set the working directory
 WORKDIR /app
 
-# Copy the Go module files
-COPY go.mod go.sum ./
+# Copy package.json and package-lock.json (or yarn.lock)
+COPY package*.json ./
 
-# Download dependencies
-RUN go mod download
+# Install dependencies, including devDependencies for building
+RUN npm install
 
-# Copy the source code
-COPY *.go ./
+# Copy tsconfig.json
+COPY tsconfig.json ./
 
-# Build the application
-# CGO_ENABLED=0 is important for static linking
-# -o /app/helloworld specifies the output path and name
-# -ldflags="-s -w" strips debug symbols, reducing binary size
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/helloworld .
+# Copy the rest of the application source code
+COPY . .
 
-# Use a minimal base image (like scratch or distroless)
-# scratch is the smallest, but distroless provides some basic necessities
-FROM gcr.io/distroless/static-debian11
+# Build TypeScript to JavaScript
+RUN npm run build
+
+# Prune devDependencies for the final image
+RUN npm prune --production
+
+# Stage 2: Create the production image
+FROM node:20-alpine
 
 # Set the working directory
 WORKDIR /app
+
 # Create a non-root user and group
 RUN groupadd --system nonroot && \
     useradd --system --gid nonroot nonroot
 
-# Copy the built binary from the builder stage
-COPY --from=builder /app/helloworld /app/helloworld
+# Copy built application (dist folder) and production node_modules from builder stage
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package*.json ./
 
 # Switch to the non-root user
 USER nonroot
 
 # Expose the port the application listens on (Cloud Run default is 8080)
+# This is metadata; the application itself needs to listen on this port.
 EXPOSE 8080
 
-# Set the entrypoint to run the binary
-ENTRYPOINT ["/app/helloworld"]
+# Set the command to run the application
+CMD ["node", "dist/server.js"]
