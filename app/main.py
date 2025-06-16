@@ -5,8 +5,7 @@ from google.cloud.firestore_v1.client import Client
 from google.cloud.exceptions import NotFound
 
 from app.models import (
-    Customer, CustomerCreate, CustomerUpdate,
-    Device, DeviceCreate
+    Customer, CustomerCreate, CustomerUpdate
 )
 from app.firebase_config import initialize_firebase_app, get_db
 import firebase_admin.firestore # For SERVER_TIMESTAMP
@@ -127,49 +126,6 @@ def delete_customer(patient_id: str, db: Client = Depends(db_dependency)):
     except Exception as e:
         print(f"UNEXPECTED Error deleting customer {patient_id}: {type(e).__name__} - {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete customer")
-
-# --- Devices Sub-collection CRUD ---
-
-@app.post("/customers/{patient_id}/devices", response_model=Device, status_code=status.HTTP_201_CREATED)
-def add_device_to_customer(patient_id: str, device_data: DeviceCreate, db: Client = Depends(db_dependency)):
-    try:
-        # Ensure customer exists
-        customer_doc = db.collection("customers").document(patient_id).get()
-        if not customer_doc.exists:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
-
-        device_dict = device_data.model_dump(exclude_unset=True)
-        if device_data.addedDate is None and 'addedDate' not in device_dict:
-            device_dict['addedDate'] = firebase_admin.firestore.SERVER_TIMESTAMP
-
-        devices_collection_ref = db.collection("customers").document(patient_id).collection("devices")
-        doc_ref = devices_collection_ref.document()
-        doc_ref.set(device_dict)
-        
-        created_doc = doc_ref.get()
-        return Device(id=created_doc.id, **created_doc.to_dict())
-    except HTTPException:
-        raise
-    except NotFound as e: # If the parent customer document doesn't exist
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parent customer not found for adding device") from e
-    except Exception as e:
-        print(f"UNEXPECTED Error adding device to customer {patient_id}: {type(e).__name__} - {str(e)}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to add device")
-
-@app.get("/customers/{patient_id}/devices", response_model=List[Device])
-def get_devices_for_customer(patient_id: str, db: Client = Depends(db_dependency)):
-    try:
-        devices_ref = db.collection("customers").document(patient_id).collection("devices")
-        docs = devices_ref.stream()
-        devices = [Device(id=doc.id, **doc.to_dict()) for doc in docs]
-        return devices
-    except HTTPException:
-        raise
-    except NotFound as e: # If the parent customer document doesn't exist
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parent customer not found for getting devices") from e
-    except Exception as e:
-        print(f"UNEXPECTED Error getting devices for customer {patient_id}: {type(e).__name__} - {str(e)}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to get devices")
 
 # Add an __init__.py to the app folder to make it a package
 # if __name__ == "__main__":

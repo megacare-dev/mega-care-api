@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock, ANY
 from datetime import datetime, timezone
-from app.models import Customer, Device # Import your Pydantic models
+from app.models import Customer # Import your Pydantic models
 
 # Test the root endpoint
 def test_read_root(client: TestClient):
@@ -21,7 +21,9 @@ def test_create_customer(client: TestClient, db_mock: MagicMock):
     customer_data_payload = {
         "firstName": "Test",
         "lastName": "User",
-        "email": "test.user@example.com",
+        "location": "Test Location",
+        "status": "Active",
+        "organisation": {"name": "Test Org"},
         # Add other required fields from CustomerCreate
     }
     # This is what doc_ref.get().to_dict() would return
@@ -50,11 +52,11 @@ def test_create_customer(client: TestClient, db_mock: MagicMock):
 def test_get_all_customers(client: TestClient, db_mock: MagicMock):
     mock_doc1 = MagicMock()
     mock_doc1.id = "cust1"
-    mock_doc1.to_dict.return_value = {"firstName": "Customer", "lastName": "One"}
+    mock_doc1.to_dict.return_value = {"firstName": "Customer", "lastName": "One", "status": "Active"}
 
     mock_doc2 = MagicMock()
     mock_doc2.id = "cust2"
-    mock_doc2.to_dict.return_value = {"firstName": "Customer", "lastName": "Two"}
+    mock_doc2.to_dict.return_value = {"firstName": "Customer", "lastName": "Two", "status": "Inactive"}
 
     db_mock.collection.return_value.stream.return_value = [mock_doc1, mock_doc2]
 
@@ -70,7 +72,7 @@ def test_get_customer_by_id_found(client: TestClient, db_mock: MagicMock):
     mock_doc_snapshot = MagicMock()
     mock_doc_snapshot.exists = True
     mock_doc_snapshot.id = patient_id
-    mock_doc_snapshot.to_dict.return_value = {"firstName": "Existing", "lastName": "Customer"}
+    mock_doc_snapshot.to_dict.return_value = {"firstName": "Existing", "lastName": "Customer", "location": "Main Street"}
 
     db_mock.collection.return_value.document.return_value.get.return_value = mock_doc_snapshot
 
@@ -93,14 +95,14 @@ def test_get_customer_by_id_not_found(client: TestClient, db_mock: MagicMock):
 
 def test_update_customer_found(client: TestClient, db_mock: MagicMock):
     patient_id = "customer_to_update"
-    update_data = {"firstName": "Updated", "notes": "Some new notes"}
+    update_data = {"firstName": "Updated", "location": "New Location"}
 
     mock_existing_doc_snapshot = MagicMock()
     mock_existing_doc_snapshot.exists = True
 
     mock_updated_doc_snapshot = MagicMock()
     mock_updated_doc_snapshot.id = patient_id
-    mock_updated_doc_snapshot.to_dict.return_value = {**update_data, "lastName": "OriginalLastName"} # Simulate other fields
+    mock_updated_doc_snapshot.to_dict.return_value = {**update_data, "lastName": "OriginalLastName", "status": "Active"} # Simulate other fields
 
     mock_doc_ref = MagicMock()
     # Simulate the get() calls: first for existence check, second after update
@@ -112,7 +114,7 @@ def test_update_customer_found(client: TestClient, db_mock: MagicMock):
     assert response.status_code == 200
     updated_customer = response.json()
     assert updated_customer["firstName"] == "Updated"
-    assert updated_customer["notes"] == "Some new notes"
+    assert updated_customer["location"] == "New Location"
     mock_doc_ref.set.assert_called_once_with(update_data, merge=True)
 
 def test_update_customer_not_found(client: TestClient, db_mock: MagicMock):
@@ -158,68 +160,3 @@ def test_delete_customer_not_found(client: TestClient, db_mock: MagicMock):
     response = client.delete(f"/customers/{patient_id}")
     assert response.status_code == 404
     assert response.json()["detail"] == "Customer not found to delete"
-
-# --- Test Devices Sub-collection CRUD ---
-
-def test_add_device_to_customer(client: TestClient, db_mock: MagicMock):
-    patient_id = "existing_customer_for_device"
-    device_payload = {"deviceName": "CPAP AirSense", "serialNumber": "SN123"}
-
-    # Mock customer existence check
-    mock_customer_doc = MagicMock()
-    mock_customer_doc.exists = True
-    db_mock.collection.return_value.document.return_value.get.return_value = mock_customer_doc
-
-    # Mock device creation
-    mock_device_doc_ref = MagicMock()
-    mock_created_device_snapshot = MagicMock()
-    mock_created_device_snapshot.id = "new_device_id"
-    
-    # This is what doc_ref.get().to_dict() would return for the device
-    firestore_device_data = {**device_payload, "addedDate": datetime.now(timezone.utc)}
-    mock_created_device_snapshot.to_dict.return_value = firestore_device_data
-    mock_device_doc_ref.get.return_value = mock_created_device_snapshot
-
-    # Mock the subcollection document reference
-    db_mock.collection.return_value.document.return_value.collection.return_value.document.return_value = mock_device_doc_ref
-
-    response = client.post(f"/customers/{patient_id}/devices", json=device_payload)
-    
-    assert response.status_code == 201
-    created_device = response.json()
-    assert created_device["id"] == "new_device_id"
-    assert created_device["deviceName"] == "CPAP AirSense"
-    mock_device_doc_ref.set.assert_called_once()
-    args, kwargs = mock_device_doc_ref.set.call_args
-    assert 'addedDate' in args[0] or 'addedDate' in kwargs.get('data', {})
-
-def test_add_device_to_customer_customer_not_found(client: TestClient, db_mock: MagicMock):
-    patient_id = "non_existent_customer_for_device"
-    device_payload = {"deviceName": "Test Device", "serialNumber": "SN000"}
-
-    mock_customer_doc = MagicMock()
-    mock_customer_doc.exists = False
-    db_mock.collection.return_value.document.return_value.get.return_value = mock_customer_doc
-
-    response = client.post(f"/customers/{patient_id}/devices", json=device_payload)
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Customer not found"
-
-def test_get_devices_for_customer(client: TestClient, db_mock: MagicMock):
-    patient_id = "customer_with_devices"
-    mock_device_doc1 = MagicMock()
-    mock_device_doc1.id = "dev1"
-    mock_device_doc1.to_dict.return_value = {"deviceName": "Device A", "serialNumber": "SNA"}
-
-    mock_device_doc2 = MagicMock()
-    mock_device_doc2.id = "dev2"
-    mock_device_doc2.to_dict.return_value = {"deviceName": "Device B", "serialNumber": "SNB"}
-
-    db_mock.collection.return_value.document.return_value.collection.return_value.stream.return_value = [mock_device_doc1, mock_device_doc2]
-
-    response = client.get(f"/customers/{patient_id}/devices")
-    assert response.status_code == 200
-    devices = response.json()
-    assert len(devices) == 2
-    assert devices[0]["id"] == "dev1"
-    assert devices[1]["deviceName"] == "Device B"
