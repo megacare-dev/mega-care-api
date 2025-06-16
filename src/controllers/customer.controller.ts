@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import { getFirestoreInstance } from '../config/firebase';
+import { getDb } from '../config/firebase';
 import { Customer } from '../interfaces';
 import { toTimestamp } from '../utils/timestamp';
+import { QueryDocumentSnapshot, DocumentData } from 'firebase-admin/firestore';
 
-const db = getFirestoreInstance();
+const db = getDb();
 const customersCollection = db.collection('customers');
 
 export const createCustomer = async (req: Request, res: Response, next: NextFunction) => {
@@ -23,7 +24,7 @@ export const getAllCustomers = async (req: Request, res: Response, next: NextFun
   try {
     const snapshot = await customersCollection.get();
     const customers: Customer[] = [];
-    snapshot.forEach(doc => customers.push({ id: doc.id, ...doc.data() } as Customer));
+    snapshot.forEach((doc: QueryDocumentSnapshot<DocumentData>) => customers.push({ id: doc.id, ...doc.data() } as Customer));
     res.status(200).json(customers);
   } catch (error) {
     next(error);

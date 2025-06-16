@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import { getFirestoreInstance } from '../config/firebase';
+import { getDb } from '../config/firebase';
 import { Device } from '../interfaces';
 import { toTimestamp } from '../utils/timestamp';
+import { QueryDocumentSnapshot, DocumentData } from 'firebase-admin/firestore';
 
-const db = getFirestoreInstance();
+const db = getDb();
 
 export const addDeviceToCustomer = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -29,7 +30,7 @@ export const getDevicesForCustomer = async (req: Request, res: Response, next: N
   try {
     const patientId = req.params.patientId;
     const snapshot = await db.collection('customers').doc(patientId).collection('devices').get();
-    const devices: Device[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Device));
+    const devices: Device[] = snapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({ id: doc.id, ...doc.data() } as Device));
     res.status(200).json(devices);
   } catch (error) {
     next(error);
