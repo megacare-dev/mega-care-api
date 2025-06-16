@@ -117,15 +117,6 @@ def test_update_customer_found(client: TestClient, db_mock: MagicMock):
     assert updated_customer["location"] == "New Location"
     mock_doc_ref.set.assert_called_once_with(update_data, merge=True)
 
-# We need to provide a response to the document get() even in the case of "Not Found"
-    mock_existing_doc_snapshot = MagicMock()
-    mock_existing_doc_snapshot.exists = False  # Indicate that the customer is not found
-
-    db_mock.collection.return_value.document.return_value.get.return_value = mock_existing_doc_snapshot
-
-    response = client.put(f"/customers/{patient_id}", json=update_data)
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Customer not found to update"
 
 def test_update_customer_no_data(client: TestClient, db_mock: MagicMock):
     # This test was previously combined or misplaced.
@@ -134,7 +125,11 @@ def test_update_customer_no_data(client: TestClient, db_mock: MagicMock):
     
     mock_doc_snapshot = MagicMock() # For the existence check
     mock_doc_snapshot.exists = True
-    db_mock.collection.return_value.document.return_value.get.return_value = mock_doc_snapshot
+    
+    # The update_customer route calls .get() once for existence check.
+    # If it then proceeds, it calls .set() and then .get() again.
+    # For this test, we only care about the first .get() and the subsequent 400.
+    db_mock.collection.return_value.document.return_value.get.return_value = mock_doc_snapshot 
 
     response = client.put(f"/customers/{patient_id}", json={}) # Empty update data
     assert response.status_code == 400
@@ -146,7 +141,10 @@ def test_update_customer_not_found(client: TestClient, db_mock: MagicMock):
 
     mock_doc_snapshot = MagicMock()
     mock_doc_snapshot.exists = False
-    db_mock.collection.return_value.document.return_value.get.return_value = mock_doc_snapshot
+    
+    # The update_customer route calls .get() once for existence check.
+    # If not found, it raises HTTPException(404).
+    db_mock.collection.return_value.document.return_value.get.return_value = mock_doc_snapshot 
 
     response = client.put(f"/customers/{patient_id}", json=update_data)
     assert response.status_code == 404
@@ -156,7 +154,12 @@ def test_delete_customer_found(client: TestClient, db_mock: MagicMock):
     patient_id = "customer_to_delete"
     mock_doc_snapshot = MagicMock()
     mock_doc_snapshot.exists = True
-    db_mock.collection.return_value.document.return_value.get.return_value = mock_doc_snapshot
+
+    # The delete_customer route calls .get() once for existence check.
+    # If found, it calls .delete().
+    mock_doc_ref = MagicMock()
+    mock_doc_ref.get.return_value = mock_doc_snapshot
+    db_mock.collection.return_value.document.return_value = mock_doc_ref
 
     response = client.delete(f"/customers/{patient_id}")
     assert response.status_code == 204 # No content
@@ -166,7 +169,10 @@ def test_delete_customer_not_found(client: TestClient, db_mock: MagicMock):
     patient_id = "non_existent_customer_for_delete"
     mock_doc_snapshot = MagicMock()
     mock_doc_snapshot.exists = False
-    db_mock.collection.return_value.document.return_value.get.return_value = mock_doc_snapshot
+
+    # The delete_customer route calls .get() once for existence check.
+    # If not found, it raises HTTPException(404).
+    db_mock.collection.return_value.document.return_value.get.return_value = mock_doc_snapshot 
 
     response = client.delete(f"/customers/{patient_id}")
     assert response.status_code == 404
