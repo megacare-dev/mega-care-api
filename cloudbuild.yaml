@@ -1,17 +1,21 @@
 # This Cloud Build configuration builds a Go application,
 # pushes the Docker image to Artifact Registry, and deploys it to Cloud Run.
 
+# Add this options block to fix the error
+options:
+  defaultLogsBucketBehavior: 'REGIONAL_USER_OWNED_BUCKET'
+
 steps:
 # Step 1: Build the Docker image
 # Uses the 'docker' builder to build the image from the Dockerfile in the current directory.
 # The image is tagged with the project ID, repository name, and the commit SHA.
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'asia-southeast1-docker.pkg.dev/$PROJECT_ID/my-go-repo/helloworld:$COMMIT_SHA', '.']
+  args: ['build', '-t', 'asia-southeast1-docker.pkg.dev/mega-care-dev/mega-care-connect-repo/mega-care-api-app:$COMMIT_SHA', '.']
 
 # Step 2: Push the Docker image to Artifact Registry
 # Uses the 'docker' builder to push the tagged image to Artifact Registry.
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['push', 'asia-southeast1-docker.pkg.dev/$PROJECT_ID/my-go-repo/helloworld:$COMMIT_SHA']
+  args: ['push', 'asia-southeast1-docker.pkg.dev/mega-care-dev/mega-care-connect-repo/mega-care-api-app:$COMMIT_SHA']
 
 # Step 3: Deploy the container image to Cloud Run
 # Uses the 'gcloud' builder to deploy the image to a Cloud Run service.
@@ -20,11 +24,11 @@ steps:
 # The --allow-unauthenticated flag makes the service publicly accessible.
 # Remove it if you need authentication.
 - name: 'gcr.io/cloud-builders/gcloud'
-  args: ['run', 'deploy', 'helloworld-service', '--image', 'asia-southeast1-docker.pkg.dev/$PROJECT_ID/my-go-repo/helloworld:$COMMIT_SHA', '--region', 'asia-southeast1', '--platform', 'managed', '--allow-unauthenticated']
+  args: ['run', 'deploy', 'helloworld-service', '--image', 'asia-southeast1-docker.pkg.dev/mega-care-dev/mega-care-connect-repo/mega-care-api-app:$COMMIT_SHA', '--region', 'asia-southeast1', '--platform', 'managed', '--allow-unauthenticated']
 
 images:
 # This specifies the image that will be built and pushed.
-- 'asia-southeast1-docker.pkg.dev/$PROJECT_ID/my-go-repo/helloworld:$COMMIT_SHA'
+- 'asia-southeast1-docker.pkg.dev/mega-care-dev/mega-care-connect-repo/mega-care-api-app:$COMMIT_SHA'
 
 # Optional: Configure substitutions if needed (e.g., for service name, region)
 # substitutions:
