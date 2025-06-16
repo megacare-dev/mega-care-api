@@ -50,8 +50,6 @@ def create_customer(customer_data: CustomerCreate, db: Client = Depends(db_depen
         created_doc = doc_ref.get()
         return Customer(id=created_doc.id, **created_doc.to_dict())
 
-    except HTTPException: # Re-raise HTTPException to let FastAPI handle it
-        raise
     except Exception as e:
         print(f"Error creating customer: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create customer: {str(e)}")
@@ -63,8 +61,6 @@ def get_all_customers(db: Client = Depends(db_dependency)):
         docs = customers_ref.stream() # Use stream() for async iteration if available
         customers = [Customer(id=doc.id, **doc.to_dict()) for doc in docs]
         return customers
-    except HTTPException:
-        raise
     except Exception as e:
         print(f"Error getting customers: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to get customers")
@@ -77,8 +73,8 @@ def get_customer_by_id(patient_id: str, db: Client = Depends(db_dependency)):
         if not doc.exists:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
         return Customer(id=doc.id, **doc.to_dict())
-    except HTTPException: 
-        raise
+    except NotFound: # Specifically catch Firestore NotFound if doc_ref.get() itself raises it
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
     except Exception as e:
         print(f"Error getting customer by ID {patient_id}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to get customer")
@@ -99,8 +95,6 @@ def update_customer(patient_id: str, customer_update_data: CustomerUpdate, db: C
         doc_ref.set(update_dict, merge=True)
         updated_doc = doc_ref.get()
         return Customer(id=updated_doc.id, **updated_doc.to_dict())
-    except HTTPException: # Order matters: catch specific HTTPExceptions first
-        raise
     except NotFound: # Specifically catch Firestore NotFound from the existence check
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found to update")
     except Exception as e:
@@ -118,8 +112,6 @@ def delete_customer(patient_id: str, db: Client = Depends(db_dependency)):
 
         doc_ref.delete()
         return None # FastAPI will return 204 No Content
-    except HTTPException: # Order matters
-        raise
     except NotFound: # Specifically catch Firestore NotFound from the existence check
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found to delete")
     except Exception as e:
@@ -146,8 +138,6 @@ def add_device_to_customer(patient_id: str, device_data: DeviceCreate, db: Clien
         
         created_doc = doc_ref.get()
         return Device(id=created_doc.id, **created_doc.to_dict())
-    except HTTPException: # Order matters
-        raise
     except NotFound: # If the customer document for the subcollection doesn't exist
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found for adding device")
     except Exception as e:
@@ -161,8 +151,6 @@ def get_devices_for_customer(patient_id: str, db: Client = Depends(db_dependency
         docs = devices_ref.stream()
         devices = [Device(id=doc.id, **doc.to_dict()) for doc in docs]
         return devices
-    except HTTPException: # Order matters
-        raise
     except NotFound: # If the customer document for the subcollection doesn't exist
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found for getting devices")
     except Exception as e:
