@@ -1,23 +1,12 @@
 import express, { Request, Response } from 'express';
-import * as admin from 'firebase-admin';
 import { Customer, Device, toTimestamp } from './interfaces'; // Assuming interfaces.ts is in the same directory
+import { initializeFirebase, getDb } from './src/config/firebase'; // Adjust path if needed
 
 // Initialize Firebase Admin SDK
-// Ensure GOOGLE_APPLICATION_CREDENTIALS environment variable is set for local development,
-// or the Cloud Run service account has appropriate permissions.
-try {
-  admin.initializeApp({
-    // If using a specific service account key file:
-    // credential: admin.credential.cert(require('./path/to/your/serviceAccountKey.json')),
-    projectId: 'mega-care-dev' // Explicitly set your GCP project ID
-  });
-  console.log('Firebase Admin SDK initialized successfully.');
-} catch (error: any) {
-  console.error('Firebase Admin SDK initialization error:', error.message);
-  process.exit(1);
-}
+// This should be one of the first things your application does.
+initializeFirebase();
 
-const db = admin.firestore();
+const db = getDb(); // Get the initialized Firestore instance
 const customersCollection = db.collection('customers');
 
 const app = express();
@@ -152,8 +141,8 @@ app.get('/customers/:patientId/devices', async (req: Request, res: Response) => 
 // You would continue this pattern for GET by ID, PUT, and DELETE for devices,
 // and then replicate for masks, airTubing, and dailyReports sub-collections.
 
-app.listen(port, () => {
-  console.log(`Listening on port ${port}`);
+app.listen(port, '0.0.0.0', () => { // Explicitly listen on all IPv4 interfaces
+  console.log(`Server listening on host 0.0.0.0 and port ${port}`);
 }).on('error', (err) => {
   console.error(`Error starting server: ${err.message}`);
   process.exit(1);

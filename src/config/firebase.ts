@@ -1,23 +1,32 @@
 import * as admin from 'firebase-admin';
 
-let db: admin.firestore.Firestore;
+let dbInstance: admin.firestore.Firestore;
 
+/**
+ * Initializes the Firebase Admin SDK and Firestore.
+ * This function should be called once at application startup.
+ */
 export const initializeFirebase = () => {
-  try {
-    admin.initializeApp({
-      projectId: process.env.GCP_PROJECT_ID || 'mega-care-dev', // Use env var or default
-    });
-    db = admin.firestore();
-    console.log('Firebase Admin SDK initialized successfully.');
-  } catch (error: any) {
-    console.error('Firebase Admin SDK initialization error:', error.message);
-    process.exit(1);
+  if (admin.apps.length === 0) { // Check if already initialized
+    try {
+      admin.initializeApp({
+        projectId: process.env.GCLOUD_PROJECT || 'mega-care-dev', // Prefer environment variable
+      });
+      console.log('Firebase Admin SDK initialized successfully.');
+      dbInstance = admin.firestore();
+    } catch (error: any) {
+      console.error('Firebase Admin SDK initialization error:', error.message);
+      process.exit(1); // Exit if critical initialization fails
+    }
   }
+  dbInstance = admin.app().firestore(); // Get firestore instance from default app
 };
 
-export const getFirestoreInstance = (): admin.firestore.Firestore => {
-  if (!db) {
-    throw new Error('Firestore has not been initialized. Call initializeFirebase first.');
+export const getDb = (): admin.firestore.Firestore => {
+  if (!dbInstance) {
+    // This might happen if initializeFirebase() wasn't called at startup
+    // or if initialization failed and process didn't exit (if process.exit was removed).
+    throw new Error('Firestore has not been initialized. Call initializeFirebase() first.');
   }
-  return db;
+  return dbInstance;
 };
