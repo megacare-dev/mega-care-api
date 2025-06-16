@@ -93,6 +93,54 @@ def test_get_customer_by_id_not_found(client: TestClient, db_mock: MagicMock):
     assert response.status_code == 404
     assert response.json()["detail"] == "Customer not found"
 
+def test_get_customer_by_line_id_found(client: TestClient, db_mock: MagicMock):
+    target_line_id = "line_user_123"
+    customer_doc_id = "customer_for_line_id_test"
+    customer_data = {
+        "firstName": "Line",
+        "lastName": "User",
+        "lineId": target_line_id,
+        "status": "Active",
+        "location": "Digital World"
+    }
+
+    mock_doc_snapshot = MagicMock()
+    mock_doc_snapshot.id = customer_doc_id
+    mock_doc_snapshot.to_dict.return_value = customer_data
+
+    # Mock the Firestore query chain: collection -> where -> limit -> stream
+    mock_query_after_limit = MagicMock()
+    mock_query_after_limit.stream.return_value = [mock_doc_snapshot] # stream() returns an iterable
+
+    mock_query_after_where = MagicMock()
+    mock_query_after_where.limit.return_value = mock_query_after_limit
+
+    db_mock.collection.return_value.where.return_value = mock_query_after_where
+
+    response = client.get(f"/customers/line/{target_line_id}")
+
+    assert response.status_code == 200
+    customer = response.json()
+    assert customer["id"] == customer_doc_id
+    assert customer["lineId"] == target_line_id
+    assert customer["firstName"] == "Line"
+    db_mock.collection.assert_called_once_with("customers")
+    db_mock.collection.return_value.where.assert_called_once_with("lineId", "==", target_line_id)
+    mock_query_after_where.limit.assert_called_once_with(1)
+    mock_query_after_limit.stream.assert_called_once()
+
+def test_get_customer_by_line_id_not_found(client: TestClient, db_mock: MagicMock):
+    target_line_id = "non_existent_line_id"
+
+    mock_query_after_limit = MagicMock()
+    mock_query_after_limit.stream.return_value = [] # stream() returns an empty iterable
+    mock_query_after_where = MagicMock()
+    mock_query_after_where.limit.return_value = mock_query_after_limit
+    db_mock.collection.return_value.where.return_value = mock_query_after_where
+    response = client.get(f"/customers/line/{target_line_id}")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Customer not found with that lineId"
+
 def test_update_customer_found(client: TestClient, db_mock: MagicMock):
     patient_id = "customer_to_update"
     update_data = {"firstName": "Updated", "location": "New Location"}

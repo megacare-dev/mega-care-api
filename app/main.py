@@ -84,6 +84,28 @@ def get_customer_by_id(patient_id: str, db: Client = Depends(db_dependency)):
         print(f"UNEXPECTED Error getting customer by ID {patient_id}: {type(e).__name__} - {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to get customer")
 
+@app.get("/customers/line/{line_id}", response_model=Customer)
+def get_customer_by_line_id(line_id: str, db: Client = Depends(db_dependency)):
+    try:
+        customers_ref = db.collection("customers")
+        # Query for the customer with the given lineId.
+        # We use .limit(1) as we expect lineId to uniquely identify a customer for this endpoint,
+        # or we are interested in the first match.
+        query = customers_ref.where("lineId", "==", line_id).limit(1)
+        docs = list(query.stream()) # Execute the query and get results
+
+        if not docs:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found with that lineId")
+        
+        # Return the first document found
+        doc = docs[0]
+        return Customer(id=doc.id, **doc.to_dict())
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"UNEXPECTED Error getting customer by lineId {line_id}: {type(e).__name__} - {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to get customer by lineId")
+
 @app.put("/customers/{patient_id}", response_model=Customer)
 def update_customer(patient_id: str, customer_update_data: CustomerUpdate, db: Client = Depends(db_dependency)):
     try:
