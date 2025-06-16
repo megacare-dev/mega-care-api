@@ -1,7 +1,7 @@
 {
   "name": "mega-care-api",
   "version": "1.0.0",
-  "description": "Mega Care API in TypeScript", // Removed comment
+  "description": "Mega Care API in TypeScript",
   "main": "dist/server.js",
   "scripts": {
     "start": "node dist/server.js",
