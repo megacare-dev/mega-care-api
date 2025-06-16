@@ -4,16 +4,16 @@ import { Customer } from '../interfaces';
 import { toTimestamp } from '../utils/timestamp';
 // No longer need QueryDocumentSnapshot, DocumentData for basic doc.data() typing if using the converter fully.
 // However, QueryDocumentSnapshot might still be useful if directly working with snapshot properties.
-import { QueryDocumentSnapshot } from 'firebase-admin/firestore';
+// import { QueryDocumentSnapshot } from 'firebase-admin/firestore'; // May become unused if relying on inference
 export const createCustomer = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const customerData = req.body as Omit<Customer, 'id'>;
+    const customerData = req.body as CustomerDoc; // req.body should conform to CustomerDoc
     if (customerData.dob) customerData.dob = toTimestamp(customerData.dob);
     if (customerData.setupDate) customerData.setupDate = toTimestamp(customerData.setupDate);
 
-    const docRef = await customersCollection.add(customerData);
+    const docRef = await db.customers.add(customerData);
     // Construct the full customer object to return, including the new ID
-    const newCustomer: Customer = { id: docRef.id, ...customerData };
+    const newCustomer: Customer = { id: docRef.id, ...customerData as CustomerDoc }; // Ensure spread is CustomerDoc
     res.status(201).json(newCustomer);
   } catch (error) {
     next(error);
@@ -24,7 +24,7 @@ export const getAllCustomers = async (req: Request, res: Response, next: NextFun
   try {
     const snapshot = await db.customers.get();
     const customers: Customer[] = [];
-    snapshot.forEach((doc: QueryDocumentSnapshot<CustomerDoc>) => { // doc.data() is now CustomerDoc
+    snapshot.forEach(doc => { // doc is inferred as QueryDocumentSnapshot<CustomerDoc>
       customers.push({ id: doc.id, ...doc.data() });
     });
     res.status(200).json(customers);

@@ -2,7 +2,7 @@ import * as admin from 'firebase-admin';
 // Assuming your Customer and Device interfaces (from '../interfaces') include an 'id' field.
 // T in dataPoint<T> will represent the data structure within the Firestore document (i.e., without the 'id').
 import { Customer, Device } from '../interfaces'; // Adjust path as necessary
-
+import { WithFieldValue, PartialWithFieldValue, SetOptions, DocumentData, QueryDocumentSnapshot, FirestoreDataConverter } from 'firebase-admin/firestore';
 // Define types for Firestore document data (without id)
 export type CustomerDoc = Omit<Customer, 'id'>;
 export type DeviceDoc = Omit<Device, 'id'>;

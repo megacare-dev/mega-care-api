@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { db, DeviceDoc } from '../config/firebase'; // Import db and DeviceDoc
 import { Device } from '../interfaces';
 import { toTimestamp } from '../utils/timestamp';
-import { QueryDocumentSnapshot } from 'firebase-admin/firestore';
+// import { QueryDocumentSnapshot } from 'firebase-admin/firestore'; // May become unused if relying on inference
 
 export const addDeviceToCustomer = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -35,7 +35,7 @@ export const getDevicesForCustomer = async (req: Request, res: Response, next: N
     const patientId = req.params.patientId;
     const deviceCollectionRef = db.customerDevices(patientId);
     const snapshot = await deviceCollectionRef.get();
-    const devices: Device[] = snapshot.docs.map((doc: QueryDocumentSnapshot<DeviceDoc>) => { // doc.data() is DeviceDoc
+    const devices: Device[] = snapshot.docs.map(doc => { // doc is inferred as QueryDocumentSnapshot<DeviceDoc>
       return { id: doc.id, ...doc.data() };
     });
     res.status(200).json(devices);
