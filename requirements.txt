@@ -3,3 +3,5 @@ uvicorn[standard]
 firebase-admin
 pydantic
 python-dotenv # Optional, for local .env file handling
+pytest
+httpx # For TestClient

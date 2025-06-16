@@ -29,7 +29,7 @@ async def read_root(request: Request):
 # --- Customers CRUD ---
 
 @app.post("/customers", response_model=Customer, status_code=status.HTTP_201_CREATED)
-async def create_customer(customer_data: CustomerCreate, db: Client = Depends(db_dependency)):
+def create_customer(customer_data: CustomerCreate, db: Client = Depends(db_dependency)):
     try:
         customer_dict = customer_data.model_dump(exclude_unset=True)
         
@@ -38,10 +38,10 @@ async def create_customer(customer_data: CustomerCreate, db: Client = Depends(db
              customer_dict['setupDate'] = firebase_admin.firestore.SERVER_TIMESTAMP
 
         doc_ref = db.collection("customers").document()
-        await doc_ref.set(customer_dict) # Use await for async client if available, else direct call
+        doc_ref.set(customer_dict)
         
         # Fetch the created document to get server-generated fields like timestamps
-        created_doc = await doc_ref.get()
+        created_doc = doc_ref.get()
         return Customer(id=created_doc.id, **created_doc.to_dict())
 
     except Exception as e:
@@ -49,21 +49,21 @@ async def create_customer(customer_data: CustomerCreate, db: Client = Depends(db
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create customer: {str(e)}")
 
 @app.get("/customers", response_model=List[Customer])
-async def get_all_customers(db: Client = Depends(db_dependency)):
+def get_all_customers(db: Client = Depends(db_dependency)):
     try:
         customers_ref = db.collection("customers")
         docs = customers_ref.stream() # Use stream() for async iteration if available
-        customers = [Customer(id=doc.id, **doc.to_dict()) async for doc in docs]
+        customers = [Customer(id=doc.id, **doc.to_dict()) for doc in docs]
         return customers
     except Exception as e:
         print(f"Error getting customers: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to get customers")
 
 @app.get("/customers/{patient_id}", response_model=Customer)
-async def get_customer_by_id(patient_id: str, db: Client = Depends(db_dependency)):
+def get_customer_by_id(patient_id: str, db: Client = Depends(db_dependency)):
     try:
         doc_ref = db.collection("customers").document(patient_id)
-        doc = await doc_ref.get()
+        doc = doc_ref.get()
         if not doc.exists:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
         return Customer(id=doc.id, **doc.to_dict())
@@ -74,11 +74,11 @@ async def get_customer_by_id(patient_id: str, db: Client = Depends(db_dependency
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to get customer")
 
 @app.put("/customers/{patient_id}", response_model=Customer)
-async def update_customer(patient_id: str, customer_update_data: CustomerUpdate, db: Client = Depends(db_dependency)):
+def update_customer(patient_id: str, customer_update_data: CustomerUpdate, db: Client = Depends(db_dependency)):
     try:
         doc_ref = db.collection("customers").document(patient_id)
         # Check if document exists before attempting update
-        doc_snapshot = await doc_ref.get()
+        doc_snapshot = doc_ref.get()
         if not doc_snapshot.exists:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found to update")
 
@@ -86,8 +86,8 @@ async def update_customer(patient_id: str, customer_update_data: CustomerUpdate,
         if not update_dict:
              raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No update data provided")
 
-        await doc_ref.set(update_dict, merge=True)
-        updated_doc = await doc_ref.get()
+        doc_ref.set(update_dict, merge=True)
+        updated_doc = doc_ref.get()
         return Customer(id=updated_doc.id, **updated_doc.to_dict())
     except NotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found to update")
@@ -96,15 +96,15 @@ async def update_customer(patient_id: str, customer_update_data: CustomerUpdate,
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update customer")
 
 @app.delete("/customers/{patient_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_customer(patient_id: str, db: Client = Depends(db_dependency)):
+def delete_customer(patient_id: str, db: Client = Depends(db_dependency)):
     try:
         doc_ref = db.collection("customers").document(patient_id)
         # Check if document exists before attempting delete
-        doc_snapshot = await doc_ref.get()
+        doc_snapshot = doc_ref.get()
         if not doc_snapshot.exists:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found to delete")
 
-        await doc_ref.delete()
+        doc_ref.delete()
         return None # FastAPI will return 204 No Content
     except NotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found to delete")
@@ -115,10 +115,10 @@ async def delete_customer(patient_id: str, db: Client = Depends(db_dependency)):
 # --- Devices Sub-collection CRUD ---
 
 @app.post("/customers/{patient_id}/devices", response_model=Device, status_code=status.HTTP_201_CREATED)
-async def add_device_to_customer(patient_id: str, device_data: DeviceCreate, db: Client = Depends(db_dependency)):
+def add_device_to_customer(patient_id: str, device_data: DeviceCreate, db: Client = Depends(db_dependency)):
     try:
         # Ensure customer exists
-        customer_doc = await db.collection("customers").document(patient_id).get()
+        customer_doc = db.collection("customers").document(patient_id).get()
         if not customer_doc.exists:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
 
@@ -128,20 +128,20 @@ async def add_device_to_customer(patient_id: str, device_data: DeviceCreate, db:
 
         devices_collection_ref = db.collection("customers").document(patient_id).collection("devices")
         doc_ref = devices_collection_ref.document()
-        await doc_ref.set(device_dict)
+        doc_ref.set(device_dict)
         
-        created_doc = await doc_ref.get()
+        created_doc = doc_ref.get()
         return Device(id=created_doc.id, **created_doc.to_dict())
     except Exception as e:
         print(f"Error adding device to customer {patient_id}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to add device")
 
 @app.get("/customers/{patient_id}/devices", response_model=List[Device])
-async def get_devices_for_customer(patient_id: str, db: Client = Depends(db_dependency)):
+def get_devices_for_customer(patient_id: str, db: Client = Depends(db_dependency)):
     try:
         devices_ref = db.collection("customers").document(patient_id).collection("devices")
         docs = devices_ref.stream()
-        devices = [Device(id=doc.id, **doc.to_dict()) async for doc in docs]
+        devices = [Device(id=doc.id, **doc.to_dict()) for doc in docs]
         return devices
     except Exception as e:
         print(f"Error getting devices for customer {patient_id}: {e}")

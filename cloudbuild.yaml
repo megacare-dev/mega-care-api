@@ -12,18 +12,33 @@ substitutions:
   _IMAGE_NAME: 'mega-care-api-app'
 
 steps:
-# Step 1: Build the Docker image
+# Step 1: Install dependencies (can be part of a test setup or rely on Docker build caching)
+# This step is optional if your Dockerfile's builder stage handles dependency installation
+# and you run tests within a container built from that stage.
+# For simplicity here, we'll run tests directly on the Cloud Build worker using python.
+- name: 'python:3.11-slim' # Use a python image that matches your Dockerfile base
+  entrypoint: 'pip'
+  args: ['install', '-r', 'requirements.txt', '--user']
+
+# Step 2: Run Unit Tests
+# Uses a python image to execute pytest.
+- name: 'python:3.11-slim'
+  entrypoint: 'python'
+  args: ['-m', 'pytest']
+
+# Step 3: Build the Docker image
 # Uses the 'docker' builder to build the image from the Dockerfile in the current directory.
 # The image is tagged with the project ID, repository name, and the commit SHA.
 - name: 'gcr.io/cloud-builders/docker'
   args: ['build', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REPO}/${_IMAGE_NAME}:$COMMIT_SHA', '.']
+  waitFor: ['-'] # Wait for previous steps (tests) to complete
 
-# Step 2: Push the Docker image to Artifact Registry
+# Step 4: Push the Docker image to Artifact Registry
 # Uses the 'docker' builder to push the tagged image to Artifact Registry.
 - name: 'gcr.io/cloud-builders/docker'
   args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REPO}/${_IMAGE_NAME}:$COMMIT_SHA']
 
-# Step 3: Deploy the container image to Cloud Run
+# Step 5: Deploy the container image to Cloud Run
 # Uses the 'gcloud' builder to deploy the image to a Cloud Run service.
 # The --allow-unauthenticated flag makes the service publicly accessible.
 # Remove it if you need authentication.
