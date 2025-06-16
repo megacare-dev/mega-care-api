@@ -50,9 +50,10 @@ def create_customer(customer_data: CustomerCreate, db: Client = Depends(db_depen
         created_doc = doc_ref.get()
         return Customer(id=created_doc.id, **created_doc.to_dict())
 
-    except Exception as e: # Catch any other unexpected error
-        # Avoid printing the HTTPException itself if it was re-raised by a previous block
-        print(f"Error creating customer: {type(e).__name__} - {str(e)}")
+    except HTTPException:
+        raise # Re-raise HTTPException to be handled by FastAPI
+    except Exception as e:
+        print(f"UNEXPECTED Error creating customer: {type(e).__name__} - {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create customer: {str(e)}")
 
 @app.get("/customers", response_model=List[Customer])
@@ -62,8 +63,10 @@ def get_all_customers(db: Client = Depends(db_dependency)):
         docs = customers_ref.stream() # Use stream() for async iteration if available
         customers = [Customer(id=doc.id, **doc.to_dict()) for doc in docs]
         return customers
-    except Exception as e: # Catch any other unexpected error
-        print(f"Error getting customers: {type(e).__name__} - {str(e)}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"UNEXPECTED Error getting customers: {type(e).__name__} - {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to get customers")
 
 @app.get("/customers/{patient_id}", response_model=Customer)
@@ -74,10 +77,12 @@ def get_customer_by_id(patient_id: str, db: Client = Depends(db_dependency)):
         if not doc.exists:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
         return Customer(id=doc.id, **doc.to_dict())
+    except HTTPException:
+        raise
     except NotFound as e: # Specifically catch Firestore's NotFound
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found in Firestore") from e
-    except Exception as e: # Catch any other unexpected error
-        print(f"Error getting customer by ID {patient_id}: {type(e).__name__} - {str(e)}")
+    except Exception as e:
+        print(f"UNEXPECTED Error getting customer by ID {patient_id}: {type(e).__name__} - {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to get customer")
 
 @app.put("/customers/{patient_id}", response_model=Customer)
@@ -96,10 +101,12 @@ def update_customer(patient_id: str, customer_update_data: CustomerUpdate, db: C
         doc_ref.set(update_dict, merge=True)
         updated_doc = doc_ref.get()
         return Customer(id=updated_doc.id, **updated_doc.to_dict())
+    except HTTPException:
+        raise
     except NotFound as e: # Specifically catch Firestore's NotFound
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found in Firestore for update") from e
-    except Exception as e: # Catch any other unexpected error
-        print(f"Error updating customer {patient_id}: {type(e).__name__} - {str(e)}")
+    except Exception as e:
+        print(f"UNEXPECTED Error updating customer {patient_id}: {type(e).__name__} - {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update customer")
 
 @app.delete("/customers/{patient_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -113,10 +120,12 @@ def delete_customer(patient_id: str, db: Client = Depends(db_dependency)):
 
         doc_ref.delete()
         return None # FastAPI will return 204 No Content
+    except HTTPException:
+        raise
     except NotFound as e: # Specifically catch Firestore's NotFound
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found in Firestore for delete") from e
-    except Exception as e: # Catch any other unexpected error
-        print(f"Error deleting customer {patient_id}: {type(e).__name__} - {str(e)}")
+    except Exception as e:
+        print(f"UNEXPECTED Error deleting customer {patient_id}: {type(e).__name__} - {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete customer")
 
 # --- Devices Sub-collection CRUD ---
@@ -139,10 +148,12 @@ def add_device_to_customer(patient_id: str, device_data: DeviceCreate, db: Clien
         
         created_doc = doc_ref.get()
         return Device(id=created_doc.id, **created_doc.to_dict())
+    except HTTPException:
+        raise
     except NotFound as e: # If the parent customer document doesn't exist
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parent customer not found for adding device") from e
-    except Exception as e: # Catch any other unexpected error
-        print(f"Error adding device to customer {patient_id}: {type(e).__name__} - {str(e)}")
+    except Exception as e:
+        print(f"UNEXPECTED Error adding device to customer {patient_id}: {type(e).__name__} - {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to add device")
 
 @app.get("/customers/{patient_id}/devices", response_model=List[Device])
@@ -152,10 +163,12 @@ def get_devices_for_customer(patient_id: str, db: Client = Depends(db_dependency
         docs = devices_ref.stream()
         devices = [Device(id=doc.id, **doc.to_dict()) for doc in docs]
         return devices
+    except HTTPException:
+        raise
     except NotFound as e: # If the parent customer document doesn't exist
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parent customer not found for getting devices") from e
-    except Exception as e: # Catch any other unexpected error
-        print(f"Error getting devices for customer {patient_id}: {type(e).__name__} - {str(e)}")
+    except Exception as e:
+        print(f"UNEXPECTED Error getting devices for customer {patient_id}: {type(e).__name__} - {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to get devices")
 
 # Add an __init__.py to the app folder to make it a package
