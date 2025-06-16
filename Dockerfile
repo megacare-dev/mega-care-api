@@ -29,8 +29,8 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Create a non-root user and group
-RUN groupadd --system nonroot && \
-    useradd --system --gid nonroot nonroot
+RUN addgroup --system nonroot && \
+    adduser --system --ingroup nonroot nonroot
 
 # Copy built application (dist folder) and production node_modules from builder stage
 COPY --from=builder /app/dist ./dist
