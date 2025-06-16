@@ -127,8 +127,19 @@ def test_update_customer_found(client: TestClient, db_mock: MagicMock):
     assert response.status_code == 404
     assert response.json()["detail"] == "Customer not found to update"
 
-    # test update customer with no data
 def test_update_customer_no_data(client: TestClient, db_mock: MagicMock):
+    # This test was previously combined or misplaced.
+    # Assuming the intent was to test the "no data" scenario for updates.
+    patient_id = "customer_no_update_data"
+    
+    mock_doc_snapshot = MagicMock() # For the existence check
+    mock_doc_snapshot.exists = True
+    db_mock.collection.return_value.document.return_value.get.return_value = mock_doc_snapshot
+
+    response = client.put(f"/customers/{patient_id}", json={}) # Empty update data
+    assert response.status_code == 400
+    assert response.json()["detail"] == "No update data provided"
+
 def test_update_customer_not_found(client: TestClient, db_mock: MagicMock):
     patient_id = "non_existent_customer_for_update"
     update_data = {"firstName": "Updated"}
@@ -138,8 +149,9 @@ def test_update_customer_not_found(client: TestClient, db_mock: MagicMock):
     db_mock.collection.return_value.document.return_value.get.return_value = mock_doc_snapshot
 
     response = client.put(f"/customers/{patient_id}", json=update_data)
-    assert response.status_code == 400
-    assert response.json()["detail"] == "No update data provided"
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Customer not found to update"
+
 def test_delete_customer_found(client: TestClient, db_mock: MagicMock):
     patient_id = "customer_to_delete"
     mock_doc_snapshot = MagicMock()
