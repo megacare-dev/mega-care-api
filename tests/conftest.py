@@ -34,15 +34,26 @@ def mock_firebase_admin_sdk():
 
 
 @pytest.fixture
-def db_mock(mock_firebase_admin_sdk): # Depends on the session-wide mock
+def db_mock(): # No longer depends on mock_firebase_admin_sdk for its return value
     """
     Provides a fresh MagicMock for the Firestore client for each test.
-    This is what will be injected into the route handlers.
+    This is what will be injected into the route handlers via dependency_overrides.
     """
-    return mock_firebase_admin_sdk # Return the same mock instance configured by mock_firebase_admin_sdk
+    # The session-scoped mock_firebase_admin_sdk has already patched
+    # firebase_admin.initialize_app and firestore.client at their lookup points.
+    # This db_mock is specifically for being injected via app.dependency_overrides.
+    # Each test gets a new, clean MagicMock instance.
+    return MagicMock()
 
 @pytest.fixture
 def client(db_mock):
     from app.main import app, db_dependency # Import late to use patched firebase
+    
+    # Override the db_dependency to use the fresh db_mock for this test
     app.dependency_overrides[db_dependency] = lambda: db_mock
-    return TestClient(app)
+    
+    test_client = TestClient(app)
+    yield test_client
+    
+    # Clean up dependency overrides after the test
+    app.dependency_overrides.clear()
