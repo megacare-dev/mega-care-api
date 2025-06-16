@@ -27,23 +27,31 @@ export const initializeFirebase = () => {
 };
 
 // This helper function pipes your types through a firestore converter
-const converter = <T extends admin.firestore.DocumentData>() => ({
-  toFirestore: (data: Partial<T>): admin.firestore.DocumentData => {
-    // Firestore handles undefined fields by not writing them, which is usually desired for partial updates.
-    return data as admin.firestore.DocumentData;
+const converter = <AppModelType extends DocumentData>(): FirestoreDataConverter<AppModelType, DocumentData> => ({
+  toFirestore(
+    modelObject: WithFieldValue<AppModelType> | PartialWithFieldValue<AppModelType>,
+    options?: SetOptions // options is present for the partial update overload
+  ): DocumentData { // Return type is DocumentData
+    // The Firestore SDK handles how to apply this data based on the operation (add, set, update).
+    // We just need to return the data in a format Firestore understands.
+    return modelObject as DocumentData;
   },
-  fromFirestore: (snap: admin.firestore.QueryDocumentSnapshot): T => {
-    return snap.data() as T;
+  fromFirestore(
+    snapshot: QueryDocumentSnapshot<DocumentData>, // Firestore stores DocumentData
+    options?: admin.firestore.SnapshotOptions // options is optional for fromFirestore
+  ): AppModelType {
+    // snapshot.data() returns DocumentData. We assert it to our AppModelType.
+    return snapshot.data(options) as AppModelType;
   }
 });
 
 // This helper function exposes a 'typed' version of firestore().collection(collectionPath)
-const dataPoint = <T extends admin.firestore.DocumentData>(collectionPath: string) => {
+const dataPoint = <AppModelType extends DocumentData>(collectionPath: string) => {
   if (admin.apps.length === 0) {
     // This should ideally be prevented by calling initializeFirebase() at application startup.
     throw new Error("Firebase not initialized. Call initializeFirebase() first.");
   }
-  return admin.firestore().collection(collectionPath).withConverter(converter<T>());
+  return admin.firestore().collection(collectionPath).withConverter(converter<AppModelType>());
 };
 
 // Construct a database helper object
