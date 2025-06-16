@@ -13,13 +13,25 @@ export const initializeFirebase = () => {
         projectId: process.env.GCLOUD_PROJECT || 'mega-care-dev', // Prefer environment variable
       });
       console.log('Firebase Admin SDK initialized successfully.');
-      dbInstance = admin.firestore();
+    } catch (error: any) {
+      console.error('Firebase Admin SDK initialization error:', error.message);
+      process.exit(1); // Exit if critical initialization fails
+    }// firebase.ts
+    // ...
+    try {
+      admin.initializeApp({
+        projectId: process.env.GCLOUD_PROJECT || 'mega-care-dev',
+      });
+      console.log('Firebase Admin SDK initialized successfully.');
     } catch (error: any) {
       console.error('Firebase Admin SDK initialization error:', error.message);
       process.exit(1); // Exit if critical initialization fails
     }
+    // ...
+    
   }
-  dbInstance = admin.app().firestore(); // Get firestore instance from default app
+  // Ensure dbInstance is set from the (now guaranteed to be initialized) default app
+  dbInstance = admin.app().firestore();
 };
 
 export const getDb = (): admin.firestore.Firestore => {
