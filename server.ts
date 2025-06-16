@@ -1,13 +1,12 @@
 import express, { Request, Response } from 'express';
 import { Customer, Device, toTimestamp } from './interfaces'; // Assuming interfaces.ts is in the same directory
-import { initializeFirebase, getDb } from './src/config/firebase'; // Adjust path if needed
+import { initializeFirebase, db, CustomerDoc, DeviceDoc } from './src/config/firebase'; // Adjust path and import db, CustomerDoc, DeviceDoc
 
 // Initialize Firebase Admin SDK
 // This should be one of the first things your application does.
 initializeFirebase();
 
-const db = getDb(); // Get the initialized Firestore instance
-const customersCollection = db.collection('customers');
+// const oldDb = getDb(); // No longer needed
 
 const app = express();
 app.use(express.json()); // Middleware to parse JSON bodies
@@ -26,13 +25,14 @@ app.get('/', (req: Request, res: Response) => {
 // Create Customer
 app.post('/customers', async (req: Request, res: Response) => {
   try {
-    const customerData = req.body as Omit<Customer, 'id'>;
+    const customerDocData = req.body as CustomerDoc;
     // Convert date strings/Date objects to Firestore Timestamps
-    if (customerData.dob) customerData.dob = toTimestamp(customerData.dob);
-    if (customerData.setupDate) customerData.setupDate = toTimestamp(customerData.setupDate);
+    if (customerDocData.dob) customerDocData.dob = toTimestamp(customerDocData.dob);
+    if (customerDocData.setupDate) customerDocData.setupDate = toTimestamp(customerDocData.setupDate);
 
-    const docRef = await customersCollection.add(customerData);
-    res.status(201).send({ id: docRef.id, ...customerData });
+    const docRef = await db.customers.add(customerDocData);
+    const newCustomer: Customer = { id: docRef.id, ...customerDocData };
+    res.status(201).send(newCustomer);
   } catch (error: any) {
     console.error('Error creating customer:', error);
     res.status(500).send({ error: 'Failed to create customer', details: error.message });
@@ -42,9 +42,11 @@ app.post('/customers', async (req: Request, res: Response) => {
 // Get all Customers (consider pagination for large datasets)
 app.get('/customers', async (req: Request, res: Response) => {
   try {
-    const snapshot = await customersCollection.get();
+    const snapshot = await db.customers.get();
     const customers: Customer[] = [];
-    snapshot.forEach(doc => customers.push({ id: doc.id, ...doc.data() } as Customer));
+    snapshot.forEach(doc => { // doc.data() is CustomerDoc
+      customers.push({ id: doc.id, ...doc.data() });
+    });
     res.status(200).send(customers);
   } catch (error: any) {
     console.error('Error getting customers:', error);
@@ -56,11 +58,18 @@ app.get('/customers', async (req: Request, res: Response) => {
 app.get('/customers/:patientId', async (req: Request, res: Response) => {
   try {
     const patientId = req.params.patientId;
-    const doc = await customersCollection.doc(patientId).get();
+    const doc = await db.customers.doc(patientId).get();
     if (!doc.exists) {
       return res.status(404).send({ error: 'Customer not found' });
     }
-    res.status(200).send({ id: doc.id, ...doc.data() } as Customer);
+    const customerDocData = doc.data(); // customerDocData is CustomerDoc | undefined
+    if (customerDocData) {
+      const customer: Customer = { id: doc.id, ...customerDocData };
+      res.status(200).send(customer);
+    } else {
+      // Should be caught by !doc.exists, but as a safeguard
+      return res.status(404).send({ error: 'Customer data not found' });
+    }
   } catch (error: any) {
     console.error('Error getting customer by ID:', error);
     res.status(500).send({ error: 'Failed to get customer', details: error.message });
@@ -71,13 +80,13 @@ app.get('/customers/:patientId', async (req: Request, res: Response) => {
 app.put('/customers/:patientId', async (req: Request, res: Response) => {
   try {
     const patientId = req.params.patientId;
-    const customerData = req.body as Partial<Omit<Customer, 'id'>>;
+    const customerUpdateData = req.body as Partial<CustomerDoc>;
 
-    // Convert date strings/Date objects to Firestore Timestamps if present
-    if (customerData.dob) customerData.dob = toTimestamp(customerData.dob);
-    if (customerData.setupDate) customerData.setupDate = toTimestamp(customerData.setupDate);
+    if (customerUpdateData.dob) customerUpdateData.dob = toTimestamp(customerUpdateData.dob);
+    if (customerUpdateData.setupDate) customerUpdateData.setupDate = toTimestamp(customerUpdateData.setupDate);
 
-    await customersCollection.doc(patientId).update(customerData);
+    // For converters, using set with merge:true is often more straightforward for partial updates
+    await db.customers.doc(patientId).set(customerUpdateData, { merge: true });
     res.status(200).send({ id: patientId, message: 'Customer updated successfully' });
   } catch (error: any) {
     console.error('Error updating customer:', error);
@@ -94,7 +103,7 @@ app.delete('/customers/:patientId', async (req: Request, res: Response) => {
     const patientId = req.params.patientId;
     // Note: Deleting a document does not delete its subcollections automatically.
     // You'd need to implement recursive deletion if required.
-    await customersCollection.doc(patientId).delete();
+    await db.customers.doc(patientId).delete();
     res.status(200).send({ id: patientId, message: 'Customer deleted successfully' });
   } catch (error: any) {
     console.error('Error deleting customer:', error);
@@ -112,11 +121,12 @@ app.delete('/customers/:patientId', async (req: Request, res: Response) => {
 app.post('/customers/:patientId/devices', async (req: Request, res: Response) => {
   try {
     const patientId = req.params.patientId;
-    const deviceData = req.body as Omit<Device, 'id'>;
-    if (deviceData.addedDate) deviceData.addedDate = toTimestamp(deviceData.addedDate);
+    const deviceDocData = req.body as DeviceDoc;
+    if (deviceDocData.addedDate) deviceDocData.addedDate = toTimestamp(deviceDocData.addedDate);
 
-    const deviceRef = await customersCollection.doc(patientId).collection('devices').add(deviceData);
-    res.status(201).send({ id: deviceRef.id, ...deviceData });
+    const deviceRef = await db.customerDevices(patientId).add(deviceDocData);
+    const newDevice: Device = { id: deviceRef.id, ...deviceDocData };
+    res.status(201).send(newDevice);
   } catch (error: any)
  {
     console.error(`Error adding device to customer ${patientId}:`, error);
@@ -128,9 +138,11 @@ app.post('/customers/:patientId/devices', async (req: Request, res: Response) =>
 app.get('/customers/:patientId/devices', async (req: Request, res: Response) => {
   try {
     const patientId = req.params.patientId;
-    const snapshot = await customersCollection.doc(patientId).collection('devices').get();
+    const snapshot = await db.customerDevices(patientId).get();
     const devices: Device[] = [];
-    snapshot.forEach(doc => devices.push({ id: doc.id, ...doc.data() } as Device));
+    snapshot.forEach(doc => { // doc.data() is DeviceDoc
+      devices.push({ id: doc.id, ...doc.data() });
+    });
     res.status(200).send(devices);
   } catch (error: any) {
     console.error(`Error getting devices for customer ${patientId}:`, error);

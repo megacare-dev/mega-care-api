@@ -1,26 +1,30 @@
 import { Request, Response, NextFunction } from 'express';
-import { getDb } from '../config/firebase';
+import { db, DeviceDoc } from '../config/firebase'; // Import db and DeviceDoc
 import { Device } from '../interfaces';
 import { toTimestamp } from '../utils/timestamp';
-import { QueryDocumentSnapshot, DocumentData } from 'firebase-admin/firestore';
-
-const db = getDb();
+import { QueryDocumentSnapshot } from 'firebase-admin/firestore';
 
 export const addDeviceToCustomer = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const patientId = req.params.patientId;
-    const deviceData = req.body as Omit<Device, 'id'>;
+    const deviceData = req.body as DeviceDoc; // Data from body is DeviceDoc
     if (deviceData.addedDate) deviceData.addedDate = toTimestamp(deviceData.addedDate);
 
-    const customerDocRef = db.collection('customers').doc(patientId);
+    // Optional: Check if customer exists
+    const customerDoc = await db.customers.doc(patientId).get();
+    if (!customerDoc.exists) {
+      return res.status(404).json({ status: 'error', message: 'Customer not found' });
+    }
+
     // You might want to check if the customer exists first
     // const customerDoc = await customerDocRef.get();
     // if (!customerDoc.exists) {
     //   return res.status(404).json({ status: 'error', message: 'Customer not found' });
     // }
-
-    const deviceRef = await customerDocRef.collection('devices').add(deviceData);
-    res.status(201).json({ id: deviceRef.id, ...deviceData });
+    const deviceCollectionRef = db.customerDevices(patientId);
+    const deviceRef = await deviceCollectionRef.add(deviceData);
+    const newDevice: Device = { id: deviceRef.id, ...deviceData };
+    res.status(201).json(newDevice);
   } catch (error) {
     next(error);
   }
@@ -29,8 +33,11 @@ export const addDeviceToCustomer = async (req: Request, res: Response, next: Nex
 export const getDevicesForCustomer = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const patientId = req.params.patientId;
-    const snapshot = await db.collection('customers').doc(patientId).collection('devices').get();
-    const devices: Device[] = snapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({ id: doc.id, ...doc.data() } as Device));
+    const deviceCollectionRef = db.customerDevices(patientId);
+    const snapshot = await deviceCollectionRef.get();
+    const devices: Device[] = snapshot.docs.map((doc: QueryDocumentSnapshot<DeviceDoc>) => { // doc.data() is DeviceDoc
+      return { id: doc.id, ...doc.data() };
+    });
     res.status(200).json(devices);
   } catch (error) {
     next(error);
