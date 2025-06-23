@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.firebase_config import initialize_firebase_app
+from app.dependencies.database import initialize_firebase_app
 from app.routers import users, reports, equipment
 
 app = FastAPI(

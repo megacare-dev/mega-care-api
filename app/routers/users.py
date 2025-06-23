@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from firebase_admin import firestore
 from app.dependencies.auth import get_current_line_id
-from app.firebase_config import get_db
+from app.dependencies.database import get_db
 from app.models.user import UserStatusResponse, LinkAccountRequest
 from app.core.config import settings
 
