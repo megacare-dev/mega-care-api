@@ -41,7 +41,7 @@ images:
 
 substitutions:
   _SERVICE_NAME: "mega-care-api"
-  _REPO_NAME: "mega-care-api-repo" # The name of your Artifact Registry repo
+  _REPO_NAME: "mega-care-connect-repo" # The name of your Artifact Registry repo
   _LOCATION: "asia-southeast1" # The region for your services
 
 options:
