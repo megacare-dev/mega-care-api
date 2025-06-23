@@ -34,4 +34,4 @@ COPY ./app /app/app
 USER appuser
 
 # Command to run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0"]
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0"]
