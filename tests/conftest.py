@@ -26,10 +26,10 @@ def mock_firebase_admin_sdk():
     mock_db_client = MagicMock()
     
     # Patch 'firestore.client' within the 'app.firebase_config' module
-    # as that's where it's called to set _db_client.
-    with patch('app.firebase_config.firestore.client', return_value=mock_db_client):
+    # as that's where it's called.
+    with patch('app.dependencies.database.firestore.client', return_value=mock_db_client):
         # Also patch initialize_app if it's causing issues, though usually mocking client is enough
-        with patch('app.firebase_config.firebase_admin.initialize_app'):
+        with patch('app.dependencies.database.firebase_admin.initialize_app'):
             yield mock_db_client # This mock_db_client can be used by other fixtures if needed
 
 
@@ -47,7 +47,8 @@ def db_mock(): # No longer depends on mock_firebase_admin_sdk for its return val
 
 @pytest.fixture
 def client(db_mock):
-    from app.main import app, db_dependency # Import late to use patched firebase
+    from app.main import app # Import late to use patched firebase
+    from app.dependencies.database import db_dependency
     
     # Override the db_dependency to use the fresh db_mock for this test
     app.dependency_overrides[db_dependency] = lambda: db_mock

@@ -1,7 +1,9 @@
 fastapi
-uvicorn[standard]
-firebase-admin
+uvicorn
+google-cloud-firestore
+python-jose[cryptography]
 pydantic
-python-dotenv # Optional, for local .env file handling
-pytest
-httpx # For TestClient
+pydantic-settings
+google-cloud-secret-manager
+httpx
+firebase-admin
