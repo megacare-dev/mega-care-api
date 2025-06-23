@@ -14,15 +14,9 @@ steps:
       - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:${COMMIT_SHA}"
 
   # 3. Deploy container image to Cloud Run
-  - name: "gcr.io/google-appengine/exec-wrapper"
+  - name: "gcr.io/cloud-builders/gcloud"
+    entrypoint: "gcloud"
     args:
-      - "-i"
-      - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:${COMMIT_SHA}"
-      - "-s"
-      - "${PROJECT_ID}:${_LOCATION}:${_SERVICE_NAME}"
-      - "-e"
-      - "gcloud"
-      - "--"
       - "run"
       - "deploy"
       - "${_SERVICE_NAME}"
@@ -32,7 +26,7 @@ steps:
       - "${_LOCATION}"
       - "--platform"
       - "managed"
-      - "--allow-unauthenticated" # Important for API Gateway integration
+      - "--allow-unauthenticated"
       - "--project"
       - "${PROJECT_ID}"
 
