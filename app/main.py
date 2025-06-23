@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from contextlib import asynccontextmanager
 
 from app.dependencies.database import initialize_firebase_app
-from app.routers import users # Import the new router
+from app.routers import users, equipment, reports # Import the new routers
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,3 +25,5 @@ async def read_root(request: Request):
 
 # Include the routers
 app.include_router(users.router)
+app.include_router(equipment.router)
+app.include_router(reports.router)

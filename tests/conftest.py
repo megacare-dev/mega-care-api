@@ -49,9 +49,13 @@ def db_mock(): # No longer depends on mock_firebase_admin_sdk for its return val
 def client(db_mock):
     from app.main import app # Import late to use patched firebase
     from app.dependencies.database import db_dependency
+    from app.dependencies.auth import get_current_line_id
     
     # Override the db_dependency to use the fresh db_mock for this test
     app.dependency_overrides[db_dependency] = lambda: db_mock
+    # Override the auth dependency to bypass the actual LINE API call
+    # and return a consistent mock line_id for testing purposes.
+    app.dependency_overrides[get_current_line_id] = lambda: "MOCK_LINE_ID_FOR_TEST"
     
     test_client = TestClient(app)
     yield test_client

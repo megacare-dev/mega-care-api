@@ -37,32 +37,25 @@
 - **Done:** อัปเดต `app/routers/users.py` และ `tests/conftest.py` ให้ใช้ Dependency ใหม่นี้
 
 ### 4. พัฒนา API Endpoints (ตามลำดับความสำคัญ)
-- **`GET /api/v1/users/status`**:
-  - **Logic:** รับ `lineId` จาก Middleware, ค้นหาเอกสารใน `customers` collection ที่มี `lineId` ตรงกัน หากพบ trả về `{ "isLinked": true }`, มิฉะนั้น `{ "isLinked": false }`
-- **`POST /api/v1/users/link-account`**:
-  - **Logic:**
-    - รับ `serialNumber` จาก Request Body
-    - ใช้ Collection Group Query เพื่อค้นหา `serialNumber` ใน Sub-collection `devices` ทั้งหมด
-    - หากพบ, ดึง `patientId` จาก Path ของเอกสารแม่ (`customers/{patientId}`)
-    - ตรวจสอบว่า `lineId` ในเอกสารนั้นยังว่างอยู่หรือไม่ แล้วจึงอัปเดตฟิลด์ `lineId` ด้วย `lineId` จาก Middleware
-    - จัดการ Error Case (Serial ไม่พบ, Serial ถูกใช้แล้ว)
-- **`GET /api/v1/equipment`**:
+- **Done: `GET /api/v1/users/status`**:
+  - **Logic:** รับ `lineId` จาก Middleware, ค้นหาเอกสารใน `customers` collection และ trả vềสถานะการเชื่อมต่อ
+- **Done: `POST /api/v1/users/link-account`**:
+  - **Logic:** ใช้ Collection Group Query เพื่อค้นหา `serialNumber`, ตรวจสอบ, และอัปเดต `lineId` ในเอกสาร `customer`
+- **Done: `GET /api/v1/equipment`**:
   - **Logic:** รับ `lineId` จาก Middleware, ค้นหา `patientId` ที่ผูกกัน, แล้วดึงข้อมูลจาก Sub-collection `devices` ของลูกค้ารายนั้น
-- **`GET /api/v1/reports/latest`**:
-  - **Logic:** คล้ายกับ `equipment`, แต่ดึงข้อมูลรายงานล่าสุดจาก Sub-collection `reports`
-- **`GET /api/v1/reports/{reportDate}`**:
-  - **Service Layer:** สร้าง Service แยกสำหรับจัดการ Business Logic ของส่วนนี้
+- **Done: `GET /api/v1/reports/latest`**:
+  - **Logic:** คล้ายกับ `equipment`, แต่ดึงข้อมูลรายงานล่าสุดจาก Sub-collection `reports` โดยเรียงลำดับและจำกัดผลลัพธ์
+- **Done: `GET /api/v1/reports/{reportDate}`**:
+  - **Service Layer:** สร้าง Service แยก (`app/services/report_analyzer.py`) สำหรับจัดการ Business Logic
   - **Logic:**
     1. ดึงข้อมูลดิบ (`rawData`) จาก Firestore สำหรับวันที่ระบุ
     2. นำ `rawData` มาประมวลผลตามเงื่อนไขทางธุรกิจเพื่อสร้างส่วน `analysis` และ `overallRecommendation`
-    3. ประกอบผลลัพธ์ทั้งหมดตาม Pydantic Model ที่ออกแบบไว้แล้ว trả về
+    3. ประกอบผลลัพธ์ทั้งหมดตาม Pydantic Model ที่ออกแบบไว้แล้ว
 
 ### 5. การ Deploy และตั้งค่าบน GCP (Deployment & GCP Setup)
-- เขียน `Dockerfile` สำหรับแอปพลิเคชัน FastAPI
-- ตั้งค่า CI/CD Pipeline (เช่น Cloud Build) เพื่อ:
-  - Build Docker image และ Push ไปยัง Artifact Registry
-  - Deploy image ไปยัง Cloud Run service
-  - **สำคัญ:** ตั้งค่า Environment Variables หรือเชื่อมต่อกับ Secret Manager ใน Cloud Run เพื่อส่งค่าที่จำเป็น
+- **Done:** เขียน `Dockerfile` ที่มีประสิทธิภาพสำหรับแอปพลิเคชัน FastAPI โดยใช้ Multi-stage build และ Non-root user
+- **Done:** สร้าง `cloudbuild.yaml` เพื่อกำหนดขั้นตอน CI/CD Pipeline
+- **Next:** ตั้งค่า CI/CD Trigger บน GCP และจัดการ Environment Variables ผ่าน Secret Manager เพื่อให้ระบบพร้อมสำหรับการ Deploy อัตโนมัติ
 
 ### 6. ตั้งค่า API Gateway
 - สร้าง API Gateway Configuration (OpenAPI Spec) เพื่อกำหนด Route ทั้งหมด

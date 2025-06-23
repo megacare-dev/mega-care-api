@@ -1,60 +1,45 @@
-# This Cloud Build configuration builds a Go application,
-# pushes the Docker image to Artifact Registry, and deploys it to Cloud Run.
-
-# Add this options block to fix the error
-options:
-  defaultLogsBucketBehavior: 'REGIONAL_USER_OWNED_BUCKET'
-
-substitutions:
-  _SERVICE_NAME: 'customers-service'  # Default service name
-  _REGION: 'asia-southeast1'          # Default region
-  _ARTIFACT_REPO: 'mega-care-connect-repo'
-  _IMAGE_NAME: 'mega-care-api-app'
-
 steps:
-# Step 1: Install dependencies (can be part of a test setup or rely on Docker build caching)
-# This step is optional if your Dockerfile's builder stage handles dependency installation
-# and you run tests within a container built from that stage.
-# For simplicity here, we'll run tests directly on the Cloud Build worker using python.
-- name: 'python:3.11-slim' # Use a python image that matches your Dockerfile base
-  entrypoint: 'pip'
-  args: ['install', '-r', 'requirements.txt', '--user']
+  # 1. Build the container image
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:${COMMIT_SHA}"
+      - "."
 
-# Step 2: Run Unit Tests
-# Uses a python image to execute pytest.
-- name: 'python:3.11-slim'
-  entrypoint: 'python'
-  args: ['-m', 'pytest']
+  # 2. Push the container image to Artifact Registry
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:${COMMIT_SHA}"
 
-# Step 3: Build the Docker image
-# Uses the 'docker' builder to build the image from the Dockerfile in the current directory.
-# The image is tagged with the project ID, repository name, and the commit SHA.
-- name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REPO}/${_IMAGE_NAME}:$COMMIT_SHA', '.']
-  waitFor: ['-'] # Wait for previous steps (tests) to complete
-
-# Step 4: Push the Docker image to Artifact Registry
-# Uses the 'docker' builder to push the tagged image to Artifact Registry.
-- name: 'gcr.io/cloud-builders/docker'
-  args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REPO}/${_IMAGE_NAME}:$COMMIT_SHA']
-
-# Step 5: Deploy the container image to Cloud Run
-# Uses the 'gcloud' builder to deploy the image to a Cloud Run service.
-# The --allow-unauthenticated flag makes the service publicly accessible.
-# Remove it if you need authentication.
-- name: 'gcr.io/cloud-builders/gcloud'
-  args:
-    - 'run'
-    - 'deploy'
-    - '${_SERVICE_NAME}'
-    - '--image'
-    - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REPO}/${_IMAGE_NAME}:$COMMIT_SHA'
-    - '--region'
-    - '${_REGION}'
-    - '--platform'
-    - 'managed'
-    - '--allow-unauthenticated'
+  # 3. Deploy container image to Cloud Run
+  - name: "gcr.io/google-appengine/exec-wrapper"
+    args:
+      - "-i"
+      - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:${COMMIT_SHA}"
+      - "-s"
+      - "${PROJECT_ID}:${_LOCATION}:${_SERVICE_NAME}"
+      - "-e"
+      - "gcloud"
+      - "--"
+      - "run"
+      - "deploy"
+      - "${_SERVICE_NAME}"
+      - "--image"
+      - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:${COMMIT_SHA}"
+      - "--region"
+      - "${_LOCATION}"
+      - "--platform"
+      - "managed"
+      - "--allow-unauthenticated" # Important for API Gateway integration
+      - "--project"
+      - "${PROJECT_ID}"
 
 images:
-# This specifies the image that will be built and pushed.
-- '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REPO}/${_IMAGE_NAME}:$COMMIT_SHA'
+  - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:${COMMIT_SHA}"
+
+substitutions:
+  _SERVICE_NAME: "mega-care-api"
+  _REPO_NAME: "mega-care-api-repo" # The name of your Artifact Registry repo
+  _LOCATION: "asia-southeast1" # The region for your services
