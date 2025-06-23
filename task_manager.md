@@ -3,8 +3,9 @@
 ## Phase 0: การวางแผนและเตรียมการ (Planning & Setup)
 
 ### ตั้งค่าโปรเจกต์ (Project Setup)
-- สร้างโปรเจกต์ใหม่บน Google Cloud Platform (GCP)
-- เปิดใช้งาน APIs ที่จำเป็นทั้งหมด: Cloud Run, API Gateway, Cloud Scheduler, Firestore, Secret Manager, Document AI (ถ้าใช้)
+- สร้างโปรเจกต์ใหม่บน Google Cloud Platform (GCP) ชื่อ `mega-care-dev`
+- เปิดใช้งาน APIs ที่จำเป็นทั้งหมด: Cloud Run, API Gateway, Cloud Scheduler, Secret Manager, Document AI (ถ้าใช้)
+- **ตั้งค่า Database:** สร้าง Firestore Database ใน Native mode ที่ Region `asia-southeast1`
 - ตั้งค่า Repository บน GitHub (หรือ Version Control อื่นๆ) โดยแบ่งเป็น 2 ส่วนหลัก:
   - `https://github.com/megacare-dev/mega-care-connect` (สำหรับ Vue.js)
   - `https://github.com/megacare-dev/mega-care-api` (สำหรับ Python/FastAPI)

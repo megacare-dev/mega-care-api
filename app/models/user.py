@@ -1,28 +1,13 @@
 from pydantic import BaseModel, Field
-from typing import Optional
-from datetime import datetime
-
-# --- Request Models ---
 
 class LinkAccountRequest(BaseModel):
-    serialNumber: str
-
-# --- Response Models ---
+    """
+    Request body for linking a LINE account with a CPAP serial number.
+    """
+    serialNumber: str = Field(..., description="CPAP Serial Number to link.")
 
 class UserStatusResponse(BaseModel):
-    isLinked: bool
-
-# --- Firestore Data Models (for reference and internal use) ---
-
-class Customer(BaseModel):
-    id: str
-    patientId: str
-    firstName: str
-    lastName: str
-    lineId: Optional[str] = None
-    setupDate: Optional[datetime] = None
-
-class CustomerUpdate(BaseModel):
-    firstName: Optional[str] = None
-    lastName: Optional[str] = None
-    lineId: Optional[str] = None
+    """
+    Response body for checking user account link status.
+    """
+    isLinked: bool = Field(..., description="True if the user's LINE account is linked, False otherwise.")

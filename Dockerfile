@@ -1,39 +1,37 @@
-# Stage 1: Install dependencies
-FROM python:3.11-slim AS builder
+# Stage 1: Build Stage
+FROM python:3.9-slim-buster as builder
 
-# Set the working directory
-WORKDIR /app
-
-# Copy requirements file
-COPY requirements.txt .
-
-# Install dependencies
-# Using --no-cache-dir for smaller layers, --user to avoid permission issues if any
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Stage 2: Production image
-FROM python:3.11-slim
-
-# Set the working directory
-WORKDIR /app
+# Set environment variables
+ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE 1
 
 # Create a non-root user and group
 RUN groupadd --system appgroup && useradd --system --gid appgroup appuser
 
-# Copy installed dependencies from builder stage
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+# Set working directory
+WORKDIR /app
 
-# Copy application code (assuming your code is in an 'app' subdirectory locally)
+# Copy requirements file and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Stage 2: Final Stage
+FROM python:3.9-slim-buster
+
+# Create a non-root user and group (if not already created in base image)
+RUN groupadd --system appgroup && useradd --system --gid appgroup appuser
+
+# Set working directory
+WORKDIR /app
+
+# Copy installed dependencies from builder stage
+COPY --from=builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
+
+# Copy application code
 COPY ./app /app/app
 
-# Switch to the non-root user
+# Switch to non-root user
 USER appuser
 
-# Expose the port the application listens on (Cloud Run default is 8080)
-# This is metadata; the application itself needs to listen on this port.
-EXPOSE 8080
-
-# Set the command to run the application
-# Uvicorn will pick up the PORT environment variable from Cloud Run.
+# Command to run the application
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

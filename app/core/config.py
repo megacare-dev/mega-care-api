@@ -7,8 +7,8 @@ class Settings(BaseSettings):
     Values are loaded from environment variables.
     For local development, you can use a .env file.
     """
-    PROJECT_ID: str = "your-gcp-project-id"
-    LINE_CHANNEL_ID: str = "your-line-channel-id"
+    PROJECT_ID: str = os.getenv("GCP_PROJECT_ID", "your-gcp-project-id")
+    LINE_CHANNEL_ID: str = os.getenv("LINE_CHANNEL_ID", "your-line-channel-id")
 
     # Firestore settings
     FIRESTORE_CUSTOMERS_COLLECTION: str = "customers"

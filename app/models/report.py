@@ -1,27 +1,29 @@
 from pydantic import BaseModel, Field
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
-class AnalysisItem(BaseModel):
+class AnalysisDetail(BaseModel):
     """
-    Represents the analysis for a single metric (e.g., usage, leak).
+    Model for individual analysis sections (e.g., usage, leak, AHI).
     """
-    status: str = Field(..., description="Status of the metric, e.g., 'normal', 'high', 'low'")
-    text: str = Field(..., description="A descriptive text for the metric's value and status.")
-    recommendation: str = Field(..., description="A specific recommendation based on the metric's status.")
-
-class Analysis(BaseModel):
-    """
-    Contains the analysis for all relevant metrics from the report.
-    """
-    usage: AnalysisItem
-    leak: AnalysisItem
-    # Note: Can be extended with other metrics like 'ahi' in the future
-    # ahi: AnalysisItem
+    status: str = Field(..., description="Status of the analysis (e.g., 'normal', 'high', 'low').")
+    text: str = Field(..., description="Descriptive text for the analysis.")
+    recommendation: str = Field(..., description="Recommendation based on the analysis.")
 
 class ReportDetailResponse(BaseModel):
     """
-    The complete response model for the daily report detail endpoint.
+    Response body for fetching a daily report and its analysis.
     """
-    rawData: Dict[str, Any] = Field(..., description="The raw data from the device report.")
-    analysis: Analysis = Field(..., description="The processed analysis of the raw data.")
-    overallRecommendation: str = Field(..., description="A summary recommendation for the user based on the overall analysis.")
+    rawData: Dict[str, Any] = Field(..., description="Raw data fetched from Firestore for the specific report date.")
+    analysis: Dict[str, AnalysisDetail] = Field(
+        ...,
+        description="Detailed analysis for various metrics (e.g., 'usage', 'leak', 'ahi').",
+        example={
+            "usage": {"status": "normal", "text": "Usage is good.", "recommendation": "Keep it up."},
+            "leak": {"status": "high", "text": "High leak detected.", "recommendation": "Check mask fit."}
+        }
+    )
+    overallRecommendation: str = Field(
+        ...,
+        description="Overall summary recommendation for the report.",
+        example="Overall, your therapy is effective, but pay attention to mask leaks."
+    )

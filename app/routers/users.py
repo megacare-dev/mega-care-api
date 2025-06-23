@@ -1,68 +1,59 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from google.cloud.firestore_v1.client import Client
-
+from firebase_admin import firestore
 from app.dependencies.auth import get_current_line_id
-from app.dependencies.database import db_dependency
-from app.models.user import LinkAccountRequest, UserStatusResponse
+from app.firebase_config import get_db
+from app.models.user import UserStatusResponse, LinkAccountRequest
 from app.core.config import settings
 
-router = APIRouter(
-    prefix="/api/v1/users",
-    tags=["Users"],
-)
+router = APIRouter(prefix="/users", tags=["users"])
 
-@router.get("/status", response_model=UserStatusResponse)
+@router.get("/status", response_model=UserStatusResponse, summary="Check user account link status")
 async def get_user_status(
     line_id: str = Depends(get_current_line_id),
-    db: Client = Depends(db_dependency)
+    db: firestore.Client = Depends(get_db)
 ):
     """
-    Checks if the current user's LINE account is linked to a customer profile.
+    Checks if the current LINE user's account is linked to a patient record.
+    Requires a valid LINE access token in the Authorization header.
     """
-    try:
-        customers_ref = db.collection(settings.FIRESTORE_CUSTOMERS_COLLECTION)
-        query = customers_ref.where("lineId", "==", line_id).limit(1)
-        docs = list(query.stream())
+    customers_ref = db.collection(settings.FIRESTORE_CUSTOMERS_COLLECTION)
+    
+    # Query for a customer document where 'lineId' field matches the current line_id
+    query = customers_ref.where("lineId", "==", line_id).limit(1)
+    docs = query.stream()
+    
+    is_linked = False
+    for doc in docs:
+        is_linked = True
+        break # Found at least one linked account
+    
+    return UserStatusResponse(isLinked=is_linked)
 
-        return UserStatusResponse(isLinked=bool(docs))
-    except Exception as e:
-        print(f"Error checking user status for line_id {line_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while checking user status."
-        )
-
-@router.post("/link-account", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/link-account", summary="Link LINE account with CPAP serial number")
 async def link_account(
-    request_body: LinkAccountRequest,
+    request: LinkAccountRequest,
     line_id: str = Depends(get_current_line_id),
-    db: Client = Depends(db_dependency)
+    db: firestore.Client = Depends(get_db)
 ):
     """
-    Links a user's LINE account to a customer profile using a device serial number.
+    Links the current LINE user's account (`lineId`) with a patient record
+    by finding a device with the provided `serialNumber`.
+    
+    If successful, updates the corresponding customer document with the `lineId`.
     """
-    serial_number = request_body.serialNumber
-    try:
-        device_query = db.collection_group(settings.FIRESTORE_DEVICES_SUBCOLLECTION).where("serialNumber", "==", serial_number).limit(1)
-        device_docs = list(device_query.stream())
-
-        if not device_docs:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Serial number not found.")
-
-        device_doc = device_docs[0]
-        customer_ref = device_doc.reference.parent.parent
-        customer_doc = customer_ref.get()
-
-        if not customer_doc.exists or customer_doc.to_dict().get("lineId"):
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Account is already linked or invalid.")
-
-        customer_ref.update({"lineId": line_id})
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Error linking account for serial {serial_number}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred during the account linking process."
-        )
+    devices_ref = db.collection_group(settings.FIRESTORE_DEVICES_SUBCOLLECTION)
+    
+    # Find the device by serial number
+    device_query = devices_ref.where("serialNumber", "==", request.serialNumber).limit(1)
+    device_docs = list(device_query.stream())
+    
+    if not device_docs:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found or invalid serial number.")
+    
+    device_doc = device_docs[0]
+    customer_ref = device_doc.reference.parent.parent # Get the parent customer document reference
+    
+    # Update the customer document with the lineId
+    customer_ref.update({"lineId": line_id})
+    
+    return {"message": "Account linked successfully."}

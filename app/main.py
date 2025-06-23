@@ -1,29 +1,29 @@
-from fastapi import FastAPI, Request
-from contextlib import asynccontextmanager
-
-from app.dependencies.database import initialize_firebase_app
-from app.routers import users, equipment, reports # Import the new routers
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Code to run on startup
-    initialize_firebase_app()
-    yield
-    # Code to run on shutdown (if any)
-    print("Application shutdown.")
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.firebase_config import initialize_firebase_app
+from app.routers import users, reports, equipment
 
 app = FastAPI(
     title="Mega Care API",
-    lifespan=lifespan,
-    version="2.0"
+    description="Backend API for Mega Care Connect, serving LINE LIFF App.",
+    version="1.0.0",
 )
 
-@app.get("/")
-async def read_root(request: Request):
-    print(f"Handling request: {request.url.path}")
-    return {"message": "Welcome to Mega Care API v2!"}
+# Initialize Firebase Admin SDK on application startup
+@app.on_event("startup")
+async def startup_event():
+    initialize_firebase_app()
 
-# Include the routers
-app.include_router(users.router)
-app.include_router(equipment.router)
-app.include_router(reports.router)
+# Add CORS middleware to allow requests from the LINE LIFF frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # TODO: Restrict this to your LIFF app's domain in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include API routers
+app.include_router(users.router, prefix="/api/v1")
+app.include_router(reports.router, prefix="/api/v1")
+app.include_router(equipment.router, prefix="/api/v1")
