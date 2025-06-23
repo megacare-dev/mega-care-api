@@ -17,10 +17,12 @@ def test_get_equipment_success(client: TestClient, db_mock: MagicMock):
     mock_device_doc_2 = MagicMock()
     mock_device_doc_2.to_dict.return_value = {"serialNumber": "SN2", "model": "AirSense 11"}
     
-    mock_devices_collection_ref = MagicMock()
-    mock_devices_collection_ref.stream.return_value = [mock_device_doc_1, mock_device_doc_2]
+    # Create a mock for the subcollection reference
+    mock_devices_subcollection_ref = MagicMock()
+    mock_devices_subcollection_ref.stream.return_value = [mock_device_doc_1, mock_device_doc_2]
     
-    db_mock.collection.return_value.document.return_value.collection.return_value = mock_devices_collection_ref
+    # Ensure that when customer_doc.reference.collection() is called, it returns our mock subcollection
+    mock_customer_doc.reference.collection.return_value = mock_devices_subcollection_ref
 
     # Act
     response = client.get("/api/v1/equipment", headers={"Authorization": "Bearer fake-token"})

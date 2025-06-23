@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from firebase_admin import firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 from app.dependencies.auth import get_current_line_id
 from app.dependencies.database import get_db
 from app.models.user import UserStatusResponse, LinkAccountRequest
@@ -19,7 +20,7 @@ async def get_user_status(
     customers_ref = db.collection(settings.FIRESTORE_CUSTOMERS_COLLECTION)
     
     # Query for a customer document where 'lineId' field matches the current line_id
-    query = customers_ref.where("lineId", "==", line_id).limit(1)
+    query = customers_ref.where(filter=FieldFilter("lineId", "==", line_id)).limit(1)
     docs = query.stream()
     
     is_linked = False
@@ -29,7 +30,7 @@ async def get_user_status(
     
     return UserStatusResponse(isLinked=is_linked)
 
-@router.post("/link-account", summary="Link LINE account with CPAP serial number")
+@router.post("/link-account", status_code=status.HTTP_204_NO_CONTENT, summary="Link LINE account with CPAP serial number")
 async def link_account(
     request: LinkAccountRequest,
     line_id: str = Depends(get_current_line_id),
@@ -44,7 +45,7 @@ async def link_account(
     devices_ref = db.collection_group(settings.FIRESTORE_DEVICES_SUBCOLLECTION)
     
     # Find the device by serial number
-    device_query = devices_ref.where("serialNumber", "==", request.serialNumber).limit(1)
+    device_query = devices_ref.where(filter=FieldFilter("serialNumber", "==", request.serialNumber)).limit(1)
     device_docs = list(device_query.stream())
     
     if not device_docs:
@@ -56,4 +57,4 @@ async def link_account(
     # Update the customer document with the lineId
     customer_ref.update({"lineId": line_id})
     
-    return {"message": "Account linked successfully."}
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

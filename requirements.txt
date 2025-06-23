@@ -1,9 +1,12 @@
+# Application Dependencies
 fastapi
-uvicorn
-google-cloud-firestore
-python-jose[cryptography]
-pydantic
+uvicorn[standard]
 pydantic-settings
-google-cloud-secret-manager
-httpx
 firebase-admin
+google-cloud-firestore
+httpx
+
+# Testing Dependencies
+pytest
+pytest-mock
+pytest-asyncio

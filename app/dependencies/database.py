@@ -26,7 +26,7 @@ def initialize_firebase_app():
             _logger.error("Firebase Admin SDK initialization error: %s", e, exc_info=True)
             raise RuntimeError(f"Failed to initialize Firebase Admin SDK: {e}")
 
-    _db_client = firestore.client()
+    _db_client = firestore.Client()
     _logger.info("Firestore client created successfully.")
 
 def get_db() -> Client:

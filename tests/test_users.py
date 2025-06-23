@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 
 def test_get_user_status_linked(client: TestClient, db_mock: MagicMock):
@@ -20,9 +21,16 @@ def test_get_user_status_linked(client: TestClient, db_mock: MagicMock):
     # Assert
     assert response.status_code == 200
     assert response.json() == {"isLinked": True}
-    db_mock.collection.return_value.where.assert_called_once_with(
-        "lineId", "==", "MOCK_LINE_ID_FOR_TEST"
-    )
+    # We cannot compare FieldFilter objects directly.
+    # Instead, we inspect the arguments of the mock call.
+    where_mock = db_mock.collection.return_value.where
+    where_mock.assert_called_once()
+    call_args, call_kwargs = where_mock.call_args
+    filter_arg = call_kwargs.get("filter")
+    assert isinstance(filter_arg, FieldFilter)
+    assert filter_arg.field_path == "lineId"
+    assert filter_arg.op_string == "=="
+    assert filter_arg.value == "MOCK_LINE_ID_FOR_TEST"
 
 
 def test_get_user_status_not_linked(client: TestClient, db_mock: MagicMock):
@@ -71,7 +79,7 @@ def test_link_account_success(client: TestClient, db_mock: MagicMock):
     )
 
     # Assert
-    assert response.status_code == 204
+    assert response.status_code == 204 # status_code=204 means no content in body
     mock_customer_ref.update.assert_called_once_with(
         {"lineId": "MOCK_LINE_ID_FOR_TEST"}
     )
@@ -95,4 +103,4 @@ def test_link_account_serial_not_found(client: TestClient, db_mock: MagicMock):
 
     # Assert
     assert response.status_code == 404
-    assert response.json()["detail"] == "Serial number not found."
+    assert response.json()["detail"] == "Device not found or invalid serial number."

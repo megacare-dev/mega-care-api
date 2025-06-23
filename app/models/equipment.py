@@ -1,16 +1,9 @@
 from pydantic import BaseModel
-from typing import List, Optional
-from datetime import datetime
+from typing import List
 
-class Device(BaseModel):
-    """
-    Represents a single CPAP device.
-    Corresponds to documents in the 'devices' sub-collection.
-    """
+class Equipment(BaseModel):
     serialNumber: str
     model: str
-    lastSync: Optional[datetime] = None
 
-class EquipmentResponse(BaseModel):
-    """Response model for the equipment list endpoint."""
-    devices: List[Device]
+class EquipmentListResponse(BaseModel):
+    devices: List[Equipment]

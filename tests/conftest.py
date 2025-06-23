@@ -27,7 +27,7 @@ def mock_firebase_admin_sdk():
     
     # Patch 'firestore.client' within the 'app.firebase_config' module
     # as that's where it's called.
-    with patch('app.dependencies.database.firestore.client', return_value=mock_db_client):
+    with patch('app.dependencies.database.firestore.Client', return_value=mock_db_client):
         # Also patch initialize_app if it's causing issues, though usually mocking client is enough
         with patch('app.dependencies.database.firebase_admin.initialize_app'):
             yield mock_db_client # This mock_db_client can be used by other fixtures if needed
