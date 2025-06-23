@@ -29,6 +29,7 @@ steps:
       - "--allow-unauthenticated"
       - "--project"
       - "${PROJECT_ID}"
+      - "--timeout=600s" # Increase timeout to 10 minutes (default is 5 minutes)
 
 images:
   - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:${COMMIT_SHA}"
