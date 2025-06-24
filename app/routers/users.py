@@ -47,14 +47,15 @@ async def link_account(
         filter=FieldFilter("serialNumber", "==", request.serialNumber)
     ).limit(1)
 
-    try:
-        device_doc = next(device_query.stream())
-    except StopIteration:
-        # This happens if the stream is empty
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Device with serial number '{request.serialNumber}' not found.",
-        )
+    device_docs = list(device_query.stream()) # Collect results into list
+
+    if not device_docs:
+       raise HTTPException(
+           status_code=status.HTTP_404_NOT_FOUND,
+           detail=f"Device with serial number '{request.serialNumber}' not found.",
+       )
+
+    device_doc = device_docs[0] # Access the first doc from list
 
     # Correctly get the parent customer document from the subcollection structure
     # Path: customers/{customer_id}/devices/{device_id}
@@ -62,8 +63,8 @@ async def link_account(
     # device_doc.reference.parent.parent is the customer document
     customer_ref = device_doc.reference.parent.parent
     customer_doc = customer_ref.get()
-    customer_data = customer_doc.to_dict()
 
+    customer_data = customer_doc.to_dict()
     existing_line_id = customer_data.get("lineId")
 
     if existing_line_id and existing_line_id != line_id:

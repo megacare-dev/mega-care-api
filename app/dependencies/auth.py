@@ -19,25 +19,24 @@ async def _verify_line_token(token: str) -> str:
     Raises:
         HTTPException: If the token is invalid, expired, or the LINE API returns an error.
     """
-    async with httpx.AsyncClient() as client:
-        try:
+    try:
+        async with httpx.AsyncClient() as client:
             response = await client.get(settings.LINE_API_VERIFY_URL, params={"access_token": token})
             response.raise_for_status() # Raise an exception for 4xx or 5xx responses
-            
-            data = response.json()
-            line_id = data.get("sub")
-            if not line_id:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload: 'sub' field missing.")
-            return line_id
-        except httpx.HTTPStatusError as e:
-            # LINE API returns 400 for invalid/expired tokens, 401 for invalid client_id etc.
-            # We map all these to 401 Unauthorized for our API.
-            detail_message = e.response.json().get("error_description", "Invalid or expired access token.")
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail_message)
-        except httpx.RequestError as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Network error while verifying token: {e}")
-        except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred during token verification: {e}")
+    except httpx.HTTPStatusError as e:
+        # LINE API returns 400 for invalid/expired tokens, 401 for invalid client_id etc.
+        # We map all these to 401 Unauthorized for our API.
+        detail_message = e.response.json().get("error_description", "Invalid or expired access token.")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail_message)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Network error while verifying token: {e}")
+
+    # If we are here, the request was successful (2xx)
+    data = response.json()
+    line_id = data.get("sub")
+    if not line_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload: 'sub' field missing.")
+    return line_id
 
 
 async def get_current_line_id(

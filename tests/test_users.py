@@ -68,7 +68,6 @@ def test_link_account_success(client: TestClient, db_mock: MagicMock):
     mock_customer_doc = MagicMock()
     mock_customer_doc.id = "customer_id_1"
     mock_customer_doc.to_dict.return_value = {"patientId": "patient_id_1", "lineId": None} # Initially unlinked
-    mock_customer_doc.reference = MagicMock() # Mock the reference for update()
 
     # Configure the device document's parent reference to return the mock customer document
     # Correct path: device -> devices (collection) -> customer (document)
@@ -99,8 +98,8 @@ def test_link_account_success(client: TestClient, db_mock: MagicMock):
     assert filter_arg.op_string == "=="
     assert filter_arg.value == test_serial_number
 
-    mock_device_doc.reference.parent.parent.get.assert_called_once() # Ensure customer doc was fetched
-    mock_customer_doc.reference.update.assert_called_once_with({"lineId": mock_line_id}) # Ensure lineId was updated
+    mock_device_doc.reference.parent.parent.get.assert_called_once()  # Ensure customer doc was fetched
+    mock_device_doc.reference.parent.parent.update.assert_called_once_with({"lineId": mock_line_id})  # Ensure lineId was updated on the correct reference
 
 
 def test_link_account_serial_not_found(client: TestClient, db_mock: MagicMock):
