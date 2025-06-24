@@ -1,29 +1,51 @@
 steps:
-  # 0. Run unit tests
+  # 0. Run unit tests with caching
   # This step runs first. If tests fail, the build will stop.
+  # Caches the pip download directory to speed up subsequent builds.
   - name: "python:3.9-slim-buster"
     entrypoint: "bash"
+    volumes:
+      - name: "pip_cache"
+        path: "/root/.cache/pip"
     args:
       - "-c"
       - |
         pip install -r requirements.txt
         pytest
 
-  # 1. Build the container image
+  # 1. Pull the latest image to use as a cache (ignore errors if it doesn't exist)
+  - name: "gcr.io/cloud-builders/docker"
+    entrypoint: "bash"
+    args: ["-c", "docker pull ${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:latest || exit 0"]
+
+  # 2. Build the container image with layer caching
   - name: "gcr.io/cloud-builders/docker"
     args:
       - "build"
       - "-t"
       - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:${COMMIT_SHA}"
+      # Use the latest image as a cache source to speed up builds
+      - "--cache-from"
+      - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:latest"
       - "."
 
-  # 2. Push the container image to Artifact Registry
+  # 3. Push the container image to Artifact Registry
   - name: "gcr.io/cloud-builders/docker"
     args:
       - "push"
       - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:${COMMIT_SHA}"
 
-  # 3. Deploy container image to Cloud Run
+  # 4. Tag the new image as 'latest' for caching in future builds
+  - name: "gcr.io/cloud-builders/gcloud"
+    args:
+      - "artifacts"
+      - "docker"
+      - "tags"
+      - "add"
+      - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:${COMMIT_SHA}"
+      - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:latest"
+
+  # 5. Deploy container image to Cloud Run with security best practices
   - name: "gcr.io/cloud-builders/gcloud"
     entrypoint: "gcloud"
     args:
@@ -36,10 +58,16 @@ steps:
       - "${_LOCATION}"
       - "--platform"
       - "managed"
-      - "--allow-unauthenticated"
+      # Best Practice: Secure the service. Access should be via API Gateway.
+      - "--no-allow-unauthenticated"
+      # Link secrets from Secret Manager to environment variables.
+      # Assumes a secret named 'LINE_CHANNEL_ID' exists in Secret Manager.
+      - "--update-secrets=LINE_CHANNEL_ID=LINE_CHANNEL_ID:latest"
       - "--project"
       - "${PROJECT_ID}"
       - "--timeout=600s" # Increase timeout to 10 minutes (default is 5 minutes)
+      # Best Practice: Specify a dedicated service account for the Cloud Run service
+      # - "--service-account=your-cloud-run-service-account@${PROJECT_ID}.iam.gserviceaccount.com"
 
 images:
   - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:${COMMIT_SHA}"

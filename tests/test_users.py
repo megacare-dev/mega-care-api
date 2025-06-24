@@ -21,8 +21,7 @@ def test_get_user_status_linked(client: TestClient, db_mock: MagicMock):
     # Assert
     assert response.status_code == 200
     assert response.json() == {"isLinked": True}
-    # We cannot compare FieldFilter objects directly.
-    # Instead, we inspect the arguments of the mock call.
+    # Verify the database was queried correctly
     where_mock = db_mock.collection.return_value.where
     where_mock.assert_called_once()
     call_args, call_kwargs = where_mock.call_args
@@ -54,53 +53,109 @@ def test_get_user_status_not_linked(client: TestClient, db_mock: MagicMock):
 
 def test_link_account_success(client: TestClient, db_mock: MagicMock):
     """
-    Tests POST /link-account successfully linking an account.
+    Tests POST /link-account when a valid, unlinked serial number is provided.
+    Expects 204 No Content and Firestore update.
     """
     # Arrange
-    # Mock for collection_group query
+    test_serial_number = "TESTSN123"
+    mock_line_id = "MOCK_LINE_ID_FOR_TEST"
+
+    # Mock a device document found by serial number
     mock_device_doc = MagicMock()
-    mock_customer_ref = MagicMock()
-    mock_device_doc.reference.parent.parent = mock_customer_ref
+    mock_device_doc.id = "device_id_1"
+
+    # Mock the parent customer document for the device
+    mock_customer_doc = MagicMock()
+    mock_customer_doc.id = "customer_id_1"
+    mock_customer_doc.to_dict.return_value = {"patientId": "patient_id_1", "lineId": None} # Initially unlinked
+    mock_customer_doc.reference = MagicMock() # Mock the reference for update()
+
+    # Configure the device document's parent reference to return the mock customer document
+    # Correct path: device -> devices (collection) -> customer (document)
+    mock_device_doc.reference.parent.parent.get.return_value = mock_customer_doc
+
+    # Mock the collection_group query for devices
     db_mock.collection_group.return_value.where.return_value.limit.return_value.stream.return_value = [
         mock_device_doc
     ]
 
-    # Mock for customer document get()
-    mock_customer_doc = MagicMock()
-    mock_customer_doc.exists = True
-    mock_customer_doc.to_dict.return_value = {"lineId": None}  # Account is not yet linked
-    mock_customer_ref.get.return_value = mock_customer_doc
-
     # Act
     response = client.post(
         "/api/v1/users/link-account",
-        json={"serialNumber": "VALID_SERIAL"},
-        headers={"Authorization": "Bearer fake-token"},
+        headers={"Authorization": f"Bearer fake-token"},
+        json={"serialNumber": test_serial_number},
     )
 
     # Assert
-    assert response.status_code == 204 # status_code=204 means no content in body
-    mock_customer_ref.update.assert_called_once_with(
-        {"lineId": "MOCK_LINE_ID_FOR_TEST"}
-    )
+    assert response.status_code == 204
+    # Verify Firestore interactions
+    db_mock.collection_group.assert_called_once_with("devices")
+    db_mock.collection_group.return_value.where.assert_called_once()
+    # Check the filter arguments for the where clause
+    where_args, where_kwargs = db_mock.collection_group.return_value.where.call_args
+    filter_arg = where_kwargs.get("filter")
+    assert isinstance(filter_arg, FieldFilter)
+    assert filter_arg.field_path == "serialNumber"
+    assert filter_arg.op_string == "=="
+    assert filter_arg.value == test_serial_number
+
+    mock_device_doc.reference.parent.parent.get.assert_called_once() # Ensure customer doc was fetched
+    mock_customer_doc.reference.update.assert_called_once_with({"lineId": mock_line_id}) # Ensure lineId was updated
 
 
 def test_link_account_serial_not_found(client: TestClient, db_mock: MagicMock):
     """
-    Tests POST /link-account when the serial number is not found.
+    Tests POST /link-account when the provided serial number is not found.
+    Expects 404 Not Found.
     """
     # Arrange
-    db_mock.collection_group.return_value.where.return_value.limit.return_value.stream.return_value = (
-        []
-    )
+    test_serial_number = "NONEXISTENTSN"
+    db_mock.collection_group.return_value.where.return_value.limit.return_value.stream.return_value = []
 
     # Act
     response = client.post(
         "/api/v1/users/link-account",
-        json={"serialNumber": "INVALID_SERIAL"},
-        headers={"Authorization": "Bearer fake-token"},
+        headers={"Authorization": f"Bearer fake-token"},
+        json={"serialNumber": test_serial_number},
     )
 
     # Assert
     assert response.status_code == 404
-    assert response.json()["detail"] == "Device not found or invalid serial number."
+    assert response.json()["detail"] == f"Device with serial number '{test_serial_number}' not found."
+
+
+def test_link_account_already_linked_by_another_user(client: TestClient, db_mock: MagicMock):
+    """
+    Tests POST /link-account when the device is already linked to another user.
+    Expects 409 Conflict.
+    """
+    # Arrange
+    test_serial_number = "ALREADY_LINKED_SN"
+    
+    # Mock a device document found by serial number
+    mock_device_doc = MagicMock()
+    mock_device_doc.id = "device_id_2"
+
+    # Mock the parent customer document, which already has a different lineId
+    mock_customer_doc = MagicMock()
+    mock_customer_doc.id = "customer_id_2"
+    mock_customer_doc.to_dict.return_value = {"patientId": "patient_id_2", "lineId": "ANOTHER_USERS_LINE_ID"}
+
+    # Configure the device document's parent reference
+    mock_device_doc.reference.parent.parent.get.return_value = mock_customer_doc
+
+    # Mock the collection_group query
+    db_mock.collection_group.return_value.where.return_value.limit.return_value.stream.return_value = [
+        mock_device_doc
+    ]
+
+    # Act
+    response = client.post(
+        "/api/v1/users/link-account",
+        headers={"Authorization": f"Bearer fake-token"},
+        json={"serialNumber": test_serial_number},
+    )
+
+    # Assert
+    assert response.status_code == 409
+    assert response.json()["detail"] == "This device is already linked to another account."

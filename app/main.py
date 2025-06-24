@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.dependencies.database import initialize_firebase_app
-from app.routers import users, reports, equipment
+from app.routers import users
 
 app = FastAPI(
     title="Mega Care API",
@@ -25,5 +25,3 @@ app.add_middleware(
 
 # Include API routers
 app.include_router(users.router, prefix="/api/v1")
-app.include_router(reports.router, prefix="/api/v1")
-app.include_router(equipment.router, prefix="/api/v1")

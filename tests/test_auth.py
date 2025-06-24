@@ -2,8 +2,9 @@ import pytest
 import httpx
 from unittest.mock import patch, AsyncMock, MagicMock
 from fastapi import HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
 
-from app.dependencies.auth import _verify_line_token
+from app.dependencies.auth import _verify_line_token, get_current_line_id
 from app.core.config import settings
 
 # Mark all tests in this file as asyncio
@@ -81,3 +82,41 @@ async def test_verify_line_token_missing_sub(mock_get):
 
     assert exc_info.value.status_code == 401
     assert exc_info.value.detail == "Invalid token payload: 'sub' field missing."
+
+
+# --- Tests for get_current_line_id dependency ---
+
+
+@patch("app.dependencies.auth._verify_line_token", new_callable=AsyncMock)
+async def test_get_current_line_id_success(mock_verify):
+    """
+    Tests that get_current_line_id successfully returns a line_id
+    when given valid credentials.
+    """
+    # Arrange
+    mock_verify.return_value = "U1234567890"
+    mock_credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="fake_token")
+
+    # Act
+    line_id = await get_current_line_id(mock_credentials)
+
+    # Assert
+    assert line_id == "U1234567890"
+    mock_verify.assert_awaited_once_with("fake_token")
+
+
+@patch("app.dependencies.auth._verify_line_token", new_callable=AsyncMock)
+async def test_get_current_line_id_verification_fails(mock_verify):
+    """
+    Tests that get_current_line_id propagates HTTPException from _verify_line_token.
+    """
+    # Arrange
+    mock_verify.side_effect = HTTPException(status_code=401, detail="Invalid Token")
+    mock_credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="invalid_token")
+
+    # Act & Assert
+    with pytest.raises(HTTPException) as exc_info:
+        await get_current_line_id(mock_credentials)
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Invalid Token"

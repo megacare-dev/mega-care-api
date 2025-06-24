@@ -56,7 +56,7 @@ def client(db_mock):
     # Override the auth dependency to bypass the actual LINE API call
     # and return a consistent mock line_id for testing purposes.
     app.dependency_overrides[get_current_line_id] = lambda: "MOCK_LINE_ID_FOR_TEST"
-    
+
     test_client = TestClient(app)
     yield test_client
     
