@@ -1,24 +1,13 @@
 steps:
-  # 0. Run unit tests with caching
-  # This step runs first. If tests fail, the build will stop.
-  # Caches the pip download directory to speed up subsequent builds.
-  - name: "python:3.9-slim-buster"
-    entrypoint: "bash"
-    volumes:
-      - name: "pip_cache"
-        path: "/root/.cache/pip"
-    args:
-      - "-c"
-      - |
-        pip install -r requirements.txt
-        pytest
-
-  # 1. Pull the latest image to use as a cache (ignore errors if it doesn't exist)
+  # 0. Pull the latest image to use as a cache for faster builds.
+  # Ignore errors if the image doesn't exist yet (e.g., first build).
   - name: "gcr.io/cloud-builders/docker"
     entrypoint: "bash"
     args: ["-c", "docker pull ${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:latest || exit 0"]
 
-  # 2. Build the container image with layer caching
+  # 1. Build the container image.
+  # The Dockerfile is now configured to run unit tests during this build step.
+  # If tests fail, the build will stop here.
   - name: "gcr.io/cloud-builders/docker"
     args:
       - "build"
@@ -29,13 +18,13 @@ steps:
       - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:latest"
       - "."
 
-  # 3. Push the container image to Artifact Registry
+  # 2. Push the container image to Artifact Registry
   - name: "gcr.io/cloud-builders/docker"
     args:
       - "push"
       - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:${COMMIT_SHA}"
 
-  # 4. Tag the new image as 'latest' for caching in future builds
+  # 3. Tag the new image as 'latest' for caching in future builds
   - name: "gcr.io/cloud-builders/gcloud"
     args:
       - "artifacts"
@@ -45,7 +34,7 @@ steps:
       - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:${COMMIT_SHA}"
       - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:latest"
 
-  # 5. Deploy container image to Cloud Run with security best practices
+  # 4. Deploy container image to Cloud Run with security best practices
   - name: "gcr.io/cloud-builders/gcloud"
     entrypoint: "gcloud"
     args:

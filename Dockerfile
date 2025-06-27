@@ -15,6 +15,13 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy application and test code into the builder stage
+COPY ./app /app/app
+COPY ./tests /app/tests
+
+# Run tests. If they fail, the Docker build will fail, stopping the CI pipeline.
+RUN pytest
+
 # Stage 2: Final Stage
 FROM python:3.9-slim-buster
 
