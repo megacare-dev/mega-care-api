@@ -1,6 +1,8 @@
+# Application Dependencies
 fastapi
-uvicorn[standard]
-pydantic
+uvicorn[standard] # Includes httpx for TestClient
+gunicorn
 firebase-admin
-requests
+
+# Testing Dependencies
 pytest

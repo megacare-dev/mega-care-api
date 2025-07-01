@@ -1,12 +1,18 @@
+# Git
+.git
+.gitignore
+
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
-env/
-venv/
-.env
 .pytest_cache/
-.git/
-.gitignore
-.dockerignore
+venv/
+.venv/
+env/
+*.egg-info/
+
+# Documentation & Config
+*.md
+cloudbuild.yaml
