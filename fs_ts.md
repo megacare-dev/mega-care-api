@@ -5,14 +5,14 @@ This document provides the complete functional and technical specifications for 
 This section describes what the API does from a business and user perspective.
 
 1.1. Actors
-Patient: The primary user of the mobile app. They can manage their own profile, equipment, and view their therapy data.
+Patient: The primary user of the LINE LIFF application. They can manage their own profile, equipment, and view their therapy data.
 
 Clinician: A healthcare provider who monitors one or more assigned patients. They can view patient profiles and their therapy data.
 
-System: An automated process that might submit data (e.g., from a data processing pipeline that analyzes CPAP SD cards).
+System: An automated process that submits data from external sources like ResMed AirView or a data processing pipeline that analyzes CPAP SD cards.
 
 1.2. Core Features & User Stories
-User Onboarding: A new patient can register and create their profile immediately after signing up with Firebase Authentication.
+User Onboarding: A new patient registers by providing their CPAP device's serial number. The system uses this serial number to find their pre-existing profile in the database and links it to their new app account.
 
 Profile Management: A patient can view and update their personal information (e.g., display name, date of birth).
 
@@ -54,12 +54,22 @@ These schemas define the data structures for API requests and responses. They wi
 
 from pydantic import BaseModel, Field
 from datetime import datetime, date
-from typing import Optional
+from typing import Optional, Dict
 
 # --- Base Schemas for Maps ---
 class ComplianceMap(BaseModel):
     status: Optional[str] = None
     usage_percent: Optional[float] = None
+
+class OrganisationMap(BaseModel):
+    name: Optional[str] = None
+
+class ClinicalUserMap(BaseModel):
+    name: Optional[str] = None
+
+class DataAccessMap(BaseModel):
+    type: Optional[str] = None
+    duration: Optional[str] = None
 
 class LeakMap(BaseModel):
     median: Optional[float] = None
@@ -79,10 +89,16 @@ class EventsPerHourMap(BaseModel):
 class CustomerBase(BaseModel):
     lineId: Optional[str] = None
     displayName: str
+    title: Optional[str] = None
     firstName: str
     lastName: str
     dob: date
+    location: Optional[str] = None
     status: str = "Active"
+    airViewNumber: Optional[str] = None
+    monitoringType: Optional[str] = None
+    availableData: Optional[str] = None
+    dealerPatientId: Optional[str] = None
 
 class CustomerCreate(CustomerBase):
     pass
@@ -90,13 +106,17 @@ class CustomerCreate(CustomerBase):
 class Customer(CustomerBase):
     id: str = Field(..., alias="patientId")
     setupDate: datetime
+    organisation: Optional[OrganisationMap] = None
+    clinicalUser: Optional[ClinicalUserMap] = None
     compliance: Optional[ComplianceMap] = None
+    dataAccess: Optional[DataAccessMap] = None
 
 # --- Equipment Schemas ---
 class DeviceBase(BaseModel):
     deviceName: str
     serialNumber: str
     status: str = "Active"
+    settings: Optional[Dict] = None
 
 class DeviceCreate(DeviceBase):
     pass
@@ -105,13 +125,37 @@ class Device(DeviceBase):
     id: str = Field(..., alias="deviceId")
     addedDate: datetime
 
+class MaskBase(BaseModel):
+    maskName: str
+    size: str
+
+class MaskCreate(MaskBase):
+    pass
+
+class Mask(MaskBase):
+    id: str = Field(..., alias="maskId")
+    addedDate: datetime
+
+class AirTubingBase(BaseModel):
+    tubingName: str
+
+class AirTubingCreate(AirTubingBase):
+    pass
+
+class AirTubing(AirTubingBase):
+    id: str = Field(..., alias="tubingId")
+    addedDate: datetime
+
 # --- Report Schemas ---
 class DailyReportBase(BaseModel):
     reportDate: date
     usageHours: float
+    cheyneStokesRespiration: Optional[str] = None
+    rera: Optional[float] = None
     leak: LeakMap
     pressure: PressureMap
     eventsPerHour: EventsPerHourMap
+    deviceSnapshot: Optional[Dict] = None
 
 class DailyReportCreate(DailyReportBase):
     pass
@@ -201,3 +245,100 @@ Path Parameter: patientId: str (The Firebase UID of the patient)
 Query Parameters: limit: int = 30
 
 Response (200 OK): list[DailyReport]
+
+
+## Data Hierarchy
+
+The database follows a hierarchical model with a main root collection and several nested sub-collections.
+
+customers/{patientId}├── devices/{deviceId}├── masks/{maskId}├── airTubing/{tubingId}└── dailyReports/{reportDate}
+---
+
+## 1. Root Collection: `customers`
+
+This is the main collection where each document represents a single patient. The document ID is the unique `patientId`.
+
+-   **Collection:** `customers`
+-   **Document ID:** `patient_id` (e.g., `ee319d58-9aeb-4af7-b156-f91540689595`)
+
+### Fields
+
+| Field               | Type        | Description                                       |
+| ------------------- | ----------- | ------------------------------------------------- |
+| `lineId`            | `string`    | The customer's LINE ID.                           |
+| `displayName`       | `string`    | The customer's display name.                      |
+| `title`             | `string`    | The customer's title (e.g., Mr, Mrs).             |
+| `firstName`         | `string`    | The customer's first name.                        |
+| `lastName`          | `string`    | The customer's last name.                         |
+| `dob`               | `timestamp` | The customer's date of birth.                     |
+| `location`          | `string`    | The customer's location or company.               |
+| `status`            | `string`    | The customer's status (e.g., "Active").           |
+| `setupDate`         | `timestamp` | The date the customer was set up.                 |
+| `airViewNumber`     | `string`    | The customer's AirView number.                    |
+| `monitoringType`    | `string`    | The type of monitoring (e.g., "Wireless").        |
+| `availableData`     | `string`    | The duration of available data history.           |
+| `dealerPatientId`   | `string`    | The patient ID from the dealer.                   |
+| `organisation`      | `map`       | A map containing the organisation's name.         |
+| `clinicalUser`      | `map`       | A map containing the clinical user's name.        |
+| `compliance`        | `map`       | A map with compliance status and usage percentage.|
+| `dataAccess`        | `map`       | A map with data access type and duration.         |
+
+---
+
+## 2. Sub-collections
+
+Each customer document can contain the following sub-collections:
+
+### 2.1. `devices`
+
+Stores a history of CPAP devices used by the patient.
+
+-   **Path:** `customers/{patientId}/devices/{deviceId}`
+
+| Field          | Type        | Description                               |
+| -------------- | ----------- | ----------------------------------------- |
+| `deviceName`   | `string`    | The model name of the device.             |
+| `serialNumber` | `string`    | The device's unique serial number.        |
+| `addedDate`    | `timestamp` | The date the device was added.            |
+| `status`       | `string`    | The current status of the device.         |
+| `settings`     | `map`       | A map of all specific device settings.    |
+
+### 2.2. `masks`
+
+Stores a history of masks used by the patient.
+
+-   **Path:** `customers/{patientId}/masks/{maskId}`
+
+| Field      | Type        | Description                     |
+| ---------- | ----------- | ------------------------------- |
+| `maskName` | `string`    | The model name of the mask.     |
+| `size`     | `string`    | The size of the mask.           |
+| `addedDate`| `timestamp` | The date the mask was added.    |
+
+### 2.3. `airTubing`
+
+Stores a history of air tubing used by the patient.
+
+-   **Path:** `customers/{patientId}/airTubing/{tubingId}`
+
+| Field       | Type        | Description                      |
+| ----------- | ----------- | -------------------------------- |
+| `tubingName`| `string`    | The name of the air tubing.      |
+| `addedDate` | `timestamp` | The date the tubing was added.   |
+
+### 2.4. `dailyReports`
+
+Stores daily report data extracted from PDFs or other sources. The document ID is the date of the report in `YYYY-MM-DD` format for easy querying.
+
+-   **Path:** `customers/{patientId}/dailyReports/{reportDate}`
+
+| Field                     | Type        | Description                                           |
+| ------------------------- | ----------- | ----------------------------------------------------- |
+| `reportDate`              | `timestamp` | The specific date of the report.                      |
+| `usageHours`              | `string`    | Total usage time for the day.                         |
+| `cheyneStokesRespiration` | `string`    | Duration and percentage of Cheyne-Stokes respiration. |
+| `rera`                    | `number`    | Respiratory Effort-Related Arousal events.            |
+| `leak`                    | `map`       | A map containing median and 95th percentile leak data.|
+| `pressure`                | `map`       | A map containing median and 95th percentile pressure. |
+| `eventsPerHour`           | `map`       | A map of all respiratory events per hour (AHI, etc.). |
+| `deviceSnapshot`          | `map`       | A snapshot of the device settings during the report.  |
