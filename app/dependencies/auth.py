@@ -1,51 +1,57 @@
-import httpx
+import os
+from typing import Dict
+
+import requests
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from app.core.config import settings
 
-bearer_scheme = HTTPBearer()
+# This dependency is specific to LINE Login verification.
+security = HTTPBearer()
+
+LINE_CHANNEL_ID = os.getenv("LINE_CHANNEL_ID")
+LINE_API_VERIFY_URL = "https://api.line.me/oauth2/v2.1/verify"
 
 
-async def _verify_line_token(token: str) -> str:
+def _verify_line_token(token: str) -> Dict:
     """
-    Verifies a LINE access token by calling the LINE API.
-    
-    Args:
-        token: The LINE access token to verify.
-        
-    Returns:
-        The LINE user ID (sub) if the token is valid.
-        
-    Raises:
-        HTTPException: If the token is invalid, expired, or the LINE API returns an error.
+    Internal function to verify a LINE access token.
+    Communicates with the LINE Platform.
+    """
+    if not LINE_CHANNEL_ID:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="LINE_CHANNEL_ID is not configured on the server.",
+        )
+
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    data = {"id_token": token, "client_id": LINE_CHANNEL_ID}
+
+    response = requests.post(LINE_API_VERIFY_URL, headers=headers, data=data)
+
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid LINE token: {response.json().get('error_description', 'Verification failed')}",
+        )
+
+    return response.json()
+
+
+def get_current_line_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    """
+    FastAPI dependency to get the current user's LINE ID from a bearer token.
+    Verifies the token and returns the user's LINE ID ('sub').
     """
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(settings.LINE_API_VERIFY_URL, params={"access_token": token})
-            response.raise_for_status() # Raise an exception for 4xx or 5xx responses
-    except httpx.HTTPStatusError as e:
-        # LINE API returns 400 for invalid/expired tokens, 401 for invalid client_id etc.
-        # We map all these to 401 Unauthorized for our API.
-        detail_message = e.response.json().get("error_description", "Invalid or expired access token.")
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail_message)
-    except httpx.RequestError as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Network error while verifying token: {e}")
-
-    # If we are here, the request was successful (2xx)
-    data = response.json()
-    line_id = data.get("sub")
-    if not line_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload: 'sub' field missing.")
-    return line_id
-
-
-async def get_current_line_id(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-) -> str:
-    """
-    FastAPI dependency that extracts the bearer token, verifies it with LINE,
-    and returns the user's lineId.
-    """
-    token = credentials.credentials
-    line_id = await _verify_line_token(token)
-    return line_id
+        token = credentials.credentials
+        decoded_token = _verify_line_token(token)
+        line_user_id = decoded_token.get("sub")
+        if not line_user_id:
+            raise HTTPException(status_code=401, detail="LINE user ID not found in token")
+        return line_user_id
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid authentication credentials: {e}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )

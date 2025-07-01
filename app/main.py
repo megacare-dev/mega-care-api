@@ -1,29 +1,34 @@
+import os
+import firebase_admin
+from firebase_admin import credentials
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from app.dependencies.database import initialize_firebase_app  # Ensure initialization is imported
-from app.routers import users, equipment, reports # Import other routers
+
+from app.api.v1.endpoints import customers, clinicians
+
+# --- Firebase Admin SDK Initialization ---
+# It's crucial to initialize the app only once.
+# Use GOOGLE_APPLICATION_CREDENTIALS environment variable for security.
+# In Cloud Run, this is handled automatically if the service account is set.
+try:
+    if not firebase_admin._apps:
+        cred = credentials.ApplicationDefault()
+        firebase_admin.initialize_app(cred, {
+            'projectId': os.getenv('GCP_PROJECT'),
+        })
+except Exception as e:
+    print(f"Could not initialize Firebase Admin SDK: {e}")
+    # Depending on the use case, you might want to exit the application
+    # if Firebase connection is essential for all operations.
 
 app = FastAPI(
-    title="Mega Care API",
-    description="Backend API for Mega Care Connect, serving LINE LIFF App.",
-    version="1.0.0",
+    title="MegaCare Connect API",
+    description="Backend API for the MegaCare Connect application.",
+    version="1.0.0"
 )
 
-# Initialize Firebase Admin SDK on application startup
-@app.on_event("startup")
-async def startup_event():
-    initialize_firebase_app()
+app.include_router(customers.router, prefix="/api/v1/customers", tags=["Customers"])
+app.include_router(clinicians.router, prefix="/api/v1/clinician", tags=["Clinicians"])
 
-# Add CORS middleware to allow requests from the LINE LIFF frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # TODO: Restrict this to your LIFF app's domain in production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Include API routers
-app.include_router(users.router, prefix="/api/v1") # Users router
-app.include_router(equipment.router, prefix="/api/v1") # Equipment Router
-app.include_router(reports.router, prefix="/api/v1") # Reports Router
+@app.get("/", tags=["Health Check"])
+def read_root():
+    return {"status": "ok", "message": "Welcome to MegaCare Connect API"}

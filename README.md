@@ -1,5 +1,6 @@
 # mega-care-api
-Mega Care API
+Mega Care API Specification
+
 test# Firestore Data Structure for CPAP Customer Management
 
 This document outlines the data structure used in Firestore to store customer information, their CPAP devices, and daily reports. The structure is designed to be scalable and query-efficient.
