@@ -137,8 +137,133 @@ def get_my_devices(current_user: Dict = Depends(get_current_user)):
         
     return devices
 
-# TODO: Add similar endpoints for masks and airTubing
-# - POST /me/masks -> add_a_mask
-# - GET /me/masks -> get_my_masks
-# - POST /me/airTubing -> add_air_tubing
-# - GET /me/airTubing -> get_my_air_tubing
+
+@router.post("/me/masks", response_model=schemas.Mask, status_code=status.HTTP_201_CREATED)
+def add_a_mask(
+    *,
+    mask_in: schemas.MaskCreate,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Add a new mask to the authenticated patient's profile.
+    """
+    db = firestore.client()
+    user_uid = current_user["uid"]
+    masks_ref = db.collection("customers").document(user_uid).collection("masks")
+
+    mask_data = mask_in.dict()
+    mask_data["addedDate"] = datetime.utcnow()
+
+    _update_time, new_mask_ref = masks_ref.add(mask_data)
+
+    new_mask_doc = new_mask_ref.get()
+    response_data = new_mask_doc.to_dict()
+    response_data["maskId"] = new_mask_doc.id
+
+    return response_data
+
+
+@router.get("/me/masks", response_model=List[schemas.Mask])
+def get_my_masks(current_user: Dict = Depends(get_current_user)):
+    """
+    Retrieve a list of all masks for the authenticated patient.
+    """
+    db = firestore.client()
+    user_uid = current_user["uid"]
+    masks_ref = db.collection("customers").document(user_uid).collection("masks")
+    
+    masks = []
+    for doc in masks_ref.stream():
+        mask_data = doc.to_dict()
+        mask_data["maskId"] = doc.id
+        masks.append(mask_data)
+        
+    return masks
+
+
+@router.post("/me/airTubing", response_model=schemas.AirTubing, status_code=status.HTTP_201_CREATED)
+def add_air_tubing(
+    *,
+    tubing_in: schemas.AirTubingCreate,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Add new air tubing to the authenticated patient's profile.
+    """
+    db = firestore.client()
+    user_uid = current_user["uid"]
+    tubing_ref = db.collection("customers").document(user_uid).collection("airTubing")
+
+    tubing_data = tubing_in.dict()
+    tubing_data["addedDate"] = datetime.utcnow()
+
+    _update_time, new_tubing_ref = tubing_ref.add(tubing_data)
+
+    new_tubing_doc = new_tubing_ref.get()
+    response_data = new_tubing_doc.to_dict()
+    response_data["tubingId"] = new_tubing_doc.id
+
+    return response_data
+
+
+@router.get("/me/airTubing", response_model=List[schemas.AirTubing])
+def get_my_air_tubing(current_user: Dict = Depends(get_current_user)):
+    """
+    Retrieve a list of all air tubing for the authenticated patient.
+    """
+    db = firestore.client()
+    user_uid = current_user["uid"]
+    tubing_ref = db.collection("customers").document(user_uid).collection("airTubing")
+    
+    tubes = []
+    for doc in tubing_ref.stream():
+        tubing_data = doc.to_dict()
+        tubing_data["tubingId"] = doc.id
+        tubes.append(tubing_data)
+        
+    return tubes
+
+
+@router.post("/me/dailyReports", response_model=schemas.DailyReport, status_code=status.HTTP_201_CREATED)
+def submit_daily_report(
+    *,
+    report_in: schemas.DailyReportCreate,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Submit a daily therapy report. The document ID will be the report date (YYYY-MM-DD).
+    """
+    db = firestore.client()
+    user_uid = current_user["uid"]
+    report_id = report_in.reportDate.strftime('%Y-%m-%d')
+    report_ref = db.collection("customers").document(user_uid).collection("dailyReports").document(report_id)
+
+    report_data = report_in.dict()
+    report_ref.set(report_data)
+
+    response_data = report_data
+    response_data["reportId"] = report_id
+    return response_data
+
+
+@router.get("/me/dailyReports", response_model=List[schemas.DailyReport])
+def get_my_daily_reports(
+    limit: int = Query(30, ge=1, le=100),
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Retrieve a list of recent daily reports, ordered by most recent.
+    """
+    db = firestore.client()
+    user_uid = current_user["uid"]
+    reports_ref = db.collection("customers").document(user_uid).collection("dailyReports")
+
+    query = reports_ref.order_by("reportDate", direction=firestore.Query.DESCENDING).limit(limit)
+    
+    reports = []
+    for doc in query.stream():
+        report_data = doc.to_dict()
+        report_data["reportId"] = doc.id
+        reports.append(report_data)
+        
+    return reports

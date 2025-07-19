@@ -44,38 +44,38 @@ def get_my_profile(current_user: Dict = Depends(get_current_user)):
   - [x] Fetch all documents from the `customers/{user_uid}/devices` sub-collection.
   - [x] Return the list of devices.
 - [ ] **Create & Implement Mask Endpoints:**
-  - [ ] Create `POST /customers/me/masks` endpoint in `customers.py`.
-  - [ ] Implement logic to add a mask to the `masks` sub-collection.
-  - [ ] Create `GET /customers/me/masks` endpoint in `customers.py`.
-  - [ ] Implement logic to retrieve all masks.
+  - [x] Create `POST /customers/me/masks` endpoint in `customers.py`.
+  - [x] Implement logic to add a mask to the `masks` sub-collection.
+  - [x] Create `GET /customers/me/masks` endpoint in `customers.py`.
+  - [x] Implement logic to retrieve all masks.
 - [ ] **Create & Implement Air Tubing Endpoints:**
-  - [ ] Create `POST /customers/me/airTubing` endpoint in `customers.py`.
-  - [ ] Implement logic to add tubing to the `airTubing` sub-collection.
-  - [ ] Create `GET /customers/me/airTubing` endpoint in `customers.py`.
-  - [ ] Implement logic to retrieve all air tubing.
+  - [x] Create `POST /customers/me/airTubing` endpoint in `customers.py`.
+  - [x] Implement logic to add tubing to the `airTubing` sub-collection.
+  - [x] Create `GET /customers/me/airTubing` endpoint in `customers.py`.
+  - [x] Implement logic to retrieve all air tubing.
 
 ### 1.3. Daily Reports (Patient)
 - [ ] **Create & Implement Daily Report Endpoints:**
-  - [ ] Create `POST /customers/me/dailyReports` endpoint in `customers.py`.
-  - [ ] The document ID should be the report date in `YYYY-MM-DD` format.
-  - [ ] Implement logic to add a new report to the `dailyReports` sub-collection.
-  - [ ] Create `GET /customers/me/dailyReports` endpoint in `customers.py`.
-  - [ ] Implement logic to retrieve a list of reports, ordered by date, with a `limit` parameter.
+  - [x] Create `POST /customers/me/dailyReports` endpoint in `customers.py`.
+  - [x] The document ID should be the report date in `YYYY-MM-DD` format.
+  - [x] Implement logic to add a new report to the `dailyReports` sub-collection.
+  - [x] Create `GET /customers/me/dailyReports` endpoint in `customers.py`.
+  - [x] Implement logic to retrieve a list of reports, ordered by date, with a `limit` parameter.
 
 ## Phase 2: Clinician Features
 
 This phase focuses on the features required for clinicians to monitor their patients.
 
 - [ ] **Implement `GET /clinician/patients`:**
-  - [ ] Fetch the clinician's document to get the list of `assignedPatients` (UIDs).
-  - [ ] For each patient UID, fetch the corresponding document from the `customers` collection.
-  - [ ] Return the list of customer profiles.
-  - [ ] *Note: Consider performance implications and potential for data denormalization.*
+  - [x] Fetch the clinician's document to get the list of `assignedPatients` (UIDs).
+  - [x] For each patient UID, fetch the corresponding document from the `customers` collection.
+  - [x] Return the list of customer profiles.
+  - [x] *Note: Consider performance implications and potential for data denormalization.*
 - [ ] **Implement `GET /clinician/patients/{patientId}/dailyReports`:**
-  - [ ] Implement authorization: Verify the requested `patientId` is in the clinician's `assignedPatients` list. Return 403 Forbidden if not.
-  - [ ] Fetch reports from `customers/{patientId}/dailyReports`.
-  - [ ] Order by date descending and apply the `limit`.
-  - [ ] Return the list of reports.
+  - [x] Implement authorization: Verify the requested `patientId` is in the clinician's `assignedPatients` list. Return 403 Forbidden if not.
+  - [x] Fetch reports from `customers/{patientId}/dailyReports`.
+  - [x] Order by date descending and apply the `limit`.
+  - [x] Return the list of reports.
 
 ## Phase 3: Testing & Refinement
 

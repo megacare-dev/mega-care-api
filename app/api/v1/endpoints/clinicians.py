@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from typing import List, Dict
 
+from firebase_admin import firestore
 from app.api.v1 import schemas
 from app.dependencies.auth import get_current_user
 
@@ -13,16 +14,33 @@ def get_assigned_patients(current_user: Dict = Depends(get_current_user)):
     authenticated clinician.
     """
     clinician_uid = current_user["uid"]
-    # TODO: Implement Firestore logic
-    # 1. Fetch the clinician's document (e.g., from a `clinicians` collection).
-    # 2. Get the `assignedPatients` array of patient UIDs.
-    # 3. For each patient UID, fetch the corresponding document from the `customers` collection.
-    # 4. Return the list of customer documents, mapped to `List[schemas.Customer]`.
-    # Note: This could be inefficient. Consider denormalizing patient summary data
-    # into the clinician's document or using a separate collection for assignments.
-    print(f"Fetching patients for clinician: {clinician_uid}")
-    raise HTTPException(status_code=501, detail="Not Implemented")
+    db = firestore.client()
 
+    # 1. Fetch the clinician's document from a `clinicians` collection.
+    clinician_ref = db.collection("clinicians").document(clinician_uid)
+    clinician_doc = clinician_ref.get()
+
+    if not clinician_doc.exists:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Clinician profile not found")
+
+    # 2. Get the `assignedPatients` array of patient UIDs.
+    assigned_patient_uids = clinician_doc.to_dict().get("assignedPatients", [])
+    if not assigned_patient_uids:
+        return []
+
+    # 3. For each patient UID, fetch the corresponding document from the `customers` collection.
+    # Note: This is an N+1 query and can be inefficient.
+    # Firestore's `in` operator is limited to 10 items per query. For larger lists,
+    # multiple queries or data denormalization would be necessary.
+    patients = []
+    for patient_uid in assigned_patient_uids:
+        customer_doc = db.collection("customers").document(patient_uid).get()
+        if customer_doc.exists:
+            customer_data = customer_doc.to_dict()
+            customer_data["patientId"] = customer_doc.id
+            patients.append(customer_data)
+    
+    return patients
 
 @router.get("/patients/{patientId}/dailyReports", response_model=List[schemas.DailyReport])
 def get_patient_daily_reports(
@@ -34,13 +52,32 @@ def get_patient_daily_reports(
     Retrieves recent daily reports for a specific patient assigned to the clinician.
     """
     clinician_uid = current_user["uid"]
-    # TODO: Implement Firestore logic
+    db = firestore.client()
+
     # 1. Verify the clinician is authorized to view this patient's data.
-    #    - Fetch clinician's doc, check if `patientId` is in `assignedPatients`.
-    #    - If not authorized, raise HTTPException 403 Forbidden.
+    clinician_ref = db.collection("clinicians").document(clinician_uid)
+    clinician_doc = clinician_ref.get()
+
+    if not clinician_doc.exists or patientId not in clinician_doc.to_dict().get("assignedPatients", []):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to view this patient's reports"
+        )
+
     # 2. Fetch reports from `customers/{patientId}/dailyReports`.
-    #    - Order by `reportDate` descending.
-    #    - Apply the `limit`.
-    # 3. Return the list of reports, mapped to `List[schemas.DailyReport]`.
-    print(f"Clinician {clinician_uid} fetching reports for patient {patientId}")
-    raise HTTPException(status_code=501, detail="Not Implemented")
+    reports_ref = db.collection("customers").document(patientId).collection("dailyReports")
+    
+    query = reports_ref.order_by("reportDate", direction=firestore.Query.DESCENDING).limit(limit)
+
+    # 3. Return the list of reports.
+    reports = []
+    for doc in query.stream():
+        report_data = doc.to_dict()
+        report_data["reportId"] = doc.id
+        reports.append(report_data)
+
+    if not reports:
+        # It's better to return an empty list than a 404 if the patient exists but has no reports.
+        return []
+        
+    return reports
