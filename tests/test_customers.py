@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 
 # To test the router, we need a FastAPI app instance
 from fastapi import FastAPI
@@ -58,7 +58,7 @@ def test_create_customer_profile_success(mock_firestore_client):
         "lastName": "Tester",
         "dob": datetime(1992, 5, 20, 0, 0),
         "status": "Active",
-        "setupDate": datetime.utcnow() # The exact value is set in the endpoint
+        "setupDate": datetime.now(timezone.utc) # The exact value is set in the endpoint
     }
     mock_doc_existent.to_dict.return_value = expected_db_data
     

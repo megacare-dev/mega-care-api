@@ -1,6 +1,6 @@
 # Location: app/api/v1/schemas.py
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime, date
 from typing import Optional, Dict, List
 
@@ -59,9 +59,7 @@ class Customer(CustomerBase):
     compliance: Optional[ComplianceMap] = None
     dataAccess: Optional[DataAccessMap] = None
 
-    class Config:
-        allow_population_by_field_name = True
-        orm_mode = True
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
 # --- Equipment Schemas ---
 class DeviceBase(BaseModel):
@@ -77,9 +75,7 @@ class Device(DeviceBase):
     id: str = Field(..., alias="deviceId")
     addedDate: datetime
     
-    class Config:
-        allow_population_by_field_name = True
-        orm_mode = True
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
 class MaskBase(BaseModel):
     maskName: str
@@ -92,9 +88,7 @@ class Mask(MaskBase):
     id: str = Field(..., alias="maskId")
     addedDate: datetime
 
-    class Config:
-        allow_population_by_field_name = True
-        orm_mode = True
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
 class AirTubingBase(BaseModel):
     tubingName: str
@@ -106,9 +100,7 @@ class AirTubing(AirTubingBase):
     id: str = Field(..., alias="tubingId")
     addedDate: datetime
 
-    class Config:
-        allow_population_by_field_name = True
-        orm_mode = True
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
 # --- Report Schemas ---
 class DailyReportBase(BaseModel):
@@ -127,6 +119,4 @@ class DailyReportCreate(DailyReportBase):
 class DailyReport(DailyReportBase):
     id: str = Field(..., alias="reportId") # Will be the YYYY-MM-DD date string
 
-    class Config:
-        allow_population_by_field_name = True
-        orm_mode = True
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)

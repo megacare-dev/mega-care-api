@@ -42,6 +42,42 @@ def get_assigned_patients(current_user: Dict = Depends(get_current_user)):
     
     return patients
 
+@router.get("/patients/{patientId}", response_model=schemas.Customer)
+def get_patient_profile(
+    patientId: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Retrieves the profile for a specific patient, verifying that the clinician
+    is authorized to view this patient.
+    """
+    clinician_uid = current_user["uid"]
+    db = firestore.client()
+
+    # 1. Verify the clinician is authorized to view this patient's data.
+    clinician_ref = db.collection("clinicians").document(clinician_uid)
+    clinician_doc = clinician_ref.get()
+
+    if not clinician_doc.exists or patientId not in clinician_doc.to_dict().get("assignedPatients", []):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to view this patient's profile"
+        )
+
+    # 2. Fetch the patient's document from the `customers` collection.
+    customer_ref = db.collection("customers").document(patientId)
+    customer_doc = customer_ref.get()
+
+    if not customer_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Patient profile not found"
+        )
+    
+    response_data = customer_doc.to_dict()
+    response_data["patientId"] = customer_doc.id
+    return response_data
+
 @router.get("/patients/{patientId}/dailyReports", response_model=List[schemas.DailyReport])
 def get_patient_daily_reports(
     patientId: str,

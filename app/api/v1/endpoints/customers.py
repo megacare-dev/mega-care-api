@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, status, HTTPException, Query
 from typing import List, Dict
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 import logging
 from firebase_admin import firestore
 
@@ -35,8 +35,8 @@ def create_customer_profile(
             detail="Customer profile already exists"
         )
 
-    customer_data = customer_in.dict()
-    customer_data["setupDate"] = datetime.utcnow()
+    customer_data = customer_in.model_dump()
+    customer_data["setupDate"] = datetime.now(timezone.utc)
 
     # Convert date object to datetime object for Firestore compatibility
     if isinstance(customer_data.get("dob"), date):
@@ -110,8 +110,8 @@ def add_a_device(
     user_uid = current_user["uid"]
     devices_ref = db.collection("customers").document(user_uid).collection("devices")
 
-    device_data = device_in.dict()
-    device_data["addedDate"] = datetime.utcnow()
+    device_data = device_in.model_dump()
+    device_data["addedDate"] = datetime.now(timezone.utc)
 
     # .add() creates a new document with an auto-generated ID
     update_time, new_device_ref = devices_ref.add(device_data)
@@ -156,8 +156,8 @@ def add_a_mask(
     user_uid = current_user["uid"]
     masks_ref = db.collection("customers").document(user_uid).collection("masks")
 
-    mask_data = mask_in.dict()
-    mask_data["addedDate"] = datetime.utcnow()
+    mask_data = mask_in.model_dump()
+    mask_data["addedDate"] = datetime.now(timezone.utc)
 
     _update_time, new_mask_ref = masks_ref.add(mask_data)
 
@@ -199,8 +199,8 @@ def add_air_tubing(
     user_uid = current_user["uid"]
     tubing_ref = db.collection("customers").document(user_uid).collection("airTubing")
 
-    tubing_data = tubing_in.dict()
-    tubing_data["addedDate"] = datetime.utcnow()
+    tubing_data = tubing_in.model_dump()
+    tubing_data["addedDate"] = datetime.now(timezone.utc)
 
     _update_time, new_tubing_ref = tubing_ref.add(tubing_data)
 
@@ -243,7 +243,7 @@ def submit_daily_report(
     report_id = report_in.reportDate.strftime('%Y-%m-%d')
     report_ref = db.collection("customers").document(user_uid).collection("dailyReports").document(report_id)
 
-    report_data = report_in.dict()
+    report_data = report_in.model_dump()
     # Convert date object to datetime object for Firestore compatibility
     if isinstance(report_data.get("reportDate"), date):
         report_data["reportDate"] = datetime.combine(report_data["reportDate"], datetime.min.time())
