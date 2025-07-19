@@ -1,103 +1,95 @@
-# mega-care-api
-Mega Care API Specification
+This repository contains the backend API for the MegaCare Connect application, built with FastAPI and Google Firestore.
 
-test# Firestore Data Structure for CPAP Customer Management
+## 1. Functional Overview
 
-This document outlines the data structure used in Firestore to store customer information, their CPAP devices, and daily reports. The structure is designed to be scalable and query-efficient.
+The API serves two primary actors:
+*   **Patient**: The user of the LINE LIFF application. They can manage their profile, equipment, and view therapy data.
+*   **Clinician**: A healthcare provider who monitors assigned patients.
 
-## Data Hierarchy
+### Core Features
+*   **User Onboarding & Profile Management**: Patients can register and manage their personal information.
+*   **Equipment Management**: Patients can track their CPAP devices, masks, and tubing.
+*   **Data Reporting & Retrieval**: Patients and external systems can submit daily therapy reports. Patients and clinicians can retrieve historical data.
 
-The database follows a hierarchical model with a main root collection and several nested sub-collections.
+## 2. Technical Specification
 
-customers/{patientId}├── devices/{deviceId}├── masks/{maskId}├── airTubing/{tubingId}└── dailyReports/{reportDate}
----
+*   **Framework**: FastAPI
+*   **Database**: Google Cloud Firestore
+*   **Authentication**: Firebase Authentication (ID Tokens)
 
-## 1. Root Collection: `customers`
+### API Access
+*   **Base URL**: The API is hosted on Google Cloud Run.
+*   **Authentication**: All endpoints are protected and require a `Bearer` token in the `Authorization` header.
+    ```
+    Authorization: Bearer <Firebase_ID_Token>
+    ```
 
-This is the main collection where each document represents a single patient. The document ID is the unique `patientId`.
+### Data Structure
+The database uses a hierarchical model centered around a `customers` collection. Each patient document contains their profile data and sub-collections for their `devices`, `masks`, `airTubing`, and `dailyReports`.
 
--   **Collection:** `customers`
--   **Document ID:** `patient_id` (e.g., `ee319d58-9aeb-4af7-b156-f91540689595`)
+For a detailed schema and data hierarchy, please refer to `fs_ts.md`.
 
-### Fields
+## 3. Development and Deployment
 
-| Field               | Type        | Description                                       |
-| ------------------- | ----------- | ------------------------------------------------- |
-| `lineId`            | `string`    | The customer's LINE ID.                           |
-| `displayName`       | `string`    | The customer's display name.                      |
-| `title`             | `string`    | The customer's title (e.g., Mr, Mrs).             |
-| `firstName`         | `string`    | The customer's first name.                        |
-| `lastName`          | `string`    | The customer's last name.                         |
-| `dob`               | `timestamp` | The customer's date of birth.                     |
-| `location`          | `string`    | The customer's location or company.               |
-| `status`            | `string`    | The customer's status (e.g., "Active").           |
-| `setupDate`         | `timestamp` | The date the customer was set up.                 |
-| `airViewNumber`     | `string`    | The customer's AirView number.                    |
-| `monitoringType`    | `string`    | The type of monitoring (e.g., "Wireless").        |
-| `availableData`     | `string`    | The duration of available data history.           |
-| `dealerPatientId`   | `string`    | The patient ID from the dealer.                   |
-| `organisation`      | `map`       | A map containing the organisation's name.         |
-| `clinicalUser`      | `map`       | A map containing the clinical user's name.        |
-| `compliance`        | `map`       | A map with compliance status and usage percentage.|
-| `dataAccess`        | `map`       | A map with data access type and duration.         |
+### Local Development Setup
 
----
+**Prerequisites:**
+- Python 3.8+
+- `pip` and `venv`
+- Google Cloud SDK (`gcloud` CLI)
 
-## 2. Sub-collections
+**Steps:**
 
-Each customer document can contain the following sub-collections:
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/megacare-dev/mega-care-api.git
+    cd mega-care-api
+    ```
 
-### 2.1. `devices`
+2.  **Create and activate a virtual environment:**
+    ```bash
+    # macOS/Linux
+    python3 -m venv venv
+    source venv/bin/activate
 
-Stores a history of CPAP devices used by the patient.
+    # Windows
+    python -m venv venv
+    .\venv\Scripts\activate
+    ```
 
--   **Path:** `customers/{patientId}/devices/{deviceId}`
+3.  **Install dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-| Field          | Type        | Description                               |
-| -------------- | ----------- | ----------------------------------------- |
-| `deviceName`   | `string`    | The model name of the device.             |
-| `serialNumber` | `string`    | The device's unique serial number.        |
-| `addedDate`    | `timestamp` | The date the device was added.            |
-| `status`       | `string`    | The current status of the device.         |
-| `settings`     | `map`       | A map of all specific device settings.    |
+4.  **Set up Firestore Authentication:**
+    a. Create a service account in the Google Cloud Console with the "Cloud Datastore User" role.
+    b. Download the JSON key file.
+    c. Set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to the path of the key file.
+    ```bash
+    # macOS/Linux
+    export GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/keyfile.json"
+    ```
 
-### 2.2. `masks`
+5.  **Run the application:**
+    Use `uvicorn` to start the local server with auto-reload.
+    ```bash
+    uvicorn app.main:app --reload
+    ```
+    The API will be available at `http://127.0.0.1:8000`.
+    Interactive documentation (Swagger UI) is at `http://127.0.0.1:8000/docs`.
 
-Stores a history of masks used by the patient.
+### Deployment to Google Cloud Run
 
--   **Path:** `customers/{patientId}/masks/{maskId}`
+Deployment is handled via Google Cloud Build using the `cloudbuild.yaml` configuration.
 
-| Field      | Type        | Description                     |
-| ---------- | ----------- | ------------------------------- |
-| `maskName` | `string`    | The model name of the mask.     |
-| `size`     | `string`    | The size of the mask.           |
-| `addedDate`| `timestamp` | The date the mask was added.    |
+1.  **Set your project in gcloud:**
+    ```bash
+    gcloud config set project YOUR_PROJECT_ID
+    ```
 
-### 2.3. `airTubing`
-
-Stores a history of air tubing used by the patient.
-
--   **Path:** `customers/{patientId}/airTubing/{tubingId}`
-
-| Field       | Type        | Description                      |
-| ----------- | ----------- | -------------------------------- |
-| `tubingName`| `string`    | The name of the air tubing.      |
-| `addedDate` | `timestamp` | The date the tubing was added.   |
-
-### 2.4. `dailyReports`
-
-Stores daily report data extracted from PDFs or other sources. The document ID is the date of the report in `YYYY-MM-DD` format for easy querying.
-
--   **Path:** `customers/{patientId}/dailyReports/{reportDate}`
-
-| Field                     | Type        | Description                                           |
-| ------------------------- | ----------- | ----------------------------------------------------- |
-| `reportDate`              | `timestamp` | The specific date of the report.                      |
-| `usageHours`              | `string`    | Total usage time for the day.                         |
-| `cheyneStokesRespiration` | `string`    | Duration and percentage of Cheyne-Stokes respiration. |
-| `rera`                    | `number`    | Respiratory Effort-Related Arousal events.            |
-| `leak`                    | `map`       | A map containing median and 95th percentile leak data.|
-| `pressure`                | `map`       | A map containing median and 95th percentile pressure. |
-| `eventsPerHour`           | `map`       | A map of all respiratory events per hour (AHI, etc.). |
-| `deviceSnapshot`          | `map`       | A snapshot of the device settings during the report.  |
-
+2.  **Submit the build:**
+    From the project root, run:
+    ```bash
+    gcloud builds submit --config cloudbuild.yaml .
+    ```

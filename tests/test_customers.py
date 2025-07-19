@@ -246,3 +246,125 @@ def test_submit_daily_report_success(mock_firestore_client):
     assert response_data["reportId"] == report_date_str
     assert response_data["reportDate"] == report_date_str
     assert response_data["usageHours"] == 8.5
+
+
+@patch('app.api.v1.endpoints.customers.firestore.client')
+def test_add_device_success(mock_firestore_client):
+    """Tests successful addition of a device to a customer's profile."""
+    # Arrange
+    mock_db = MagicMock()
+    mock_firestore_client.return_value = mock_db
+    mock_device_subcollection = MagicMock()
+    mock_device_ref = MagicMock()
+
+    # Path: db.collection("customers").document(FAKE_USER_UID).collection("devices")
+    mock_db.collection.return_value.document.return_value.collection.return_value = mock_device_subcollection
+    # The endpoint calls .add(), which returns a tuple (update_time, document_reference)
+    mock_device_subcollection.add.return_value = (datetime.now(timezone.utc), mock_device_ref)
+
+    request_payload = {
+        "deviceName": "AirSense 10",
+        "serialNumber": "SN123456789",
+        "status": "Active"
+    }
+
+    # Mock the .get() call that happens after creation
+    mock_device_snapshot = MagicMock()
+    mock_device_snapshot.exists = True
+    mock_device_snapshot.id = "new-device-id"
+    mock_device_snapshot.to_dict.return_value = {
+        **request_payload,
+        "addedDate": datetime.now(timezone.utc)
+    }
+    mock_device_ref.get.return_value = mock_device_snapshot
+
+    # Act
+    response = client.post("/api/v1/customers/me/devices", json=request_payload)
+
+    # Assert
+    assert response.status_code == 201
+
+    # Verify Firestore interactions
+    mock_db.collection.return_value.document.assert_called_with(FAKE_USER_UID)
+    mock_db.collection.return_value.document.return_value.collection.assert_called_with("devices")
+
+    # Verify data was added to the subcollection
+    mock_device_subcollection.add.assert_called_once()
+    call_args, _ = mock_device_subcollection.add.call_args
+    data_sent_to_firestore = call_args[0]
+    assert data_sent_to_firestore["deviceName"] == "AirSense 10"
+    assert "addedDate" in data_sent_to_firestore
+    assert isinstance(data_sent_to_firestore["addedDate"], datetime)
+
+    # Verify response
+    response_data = response.json()
+    assert response_data["deviceId"] == "new-device-id"
+    assert response_data["deviceName"] == "AirSense 10"
+    assert "addedDate" in response_data
+
+@patch('app.api.v1.endpoints.customers.firestore.client')
+def test_get_my_devices_success(mock_firestore_client):
+    """Tests successful retrieval of a list of devices."""
+    # Arrange
+    mock_db = MagicMock()
+    mock_firestore_client.return_value = mock_db
+    mock_device_subcollection = MagicMock()
+
+    mock_db.collection.return_value.document.return_value.collection.return_value = mock_device_subcollection
+
+    # Mock two device documents being returned
+    device1_data = { "deviceName": "AirSense 10", "serialNumber": "SN1", "status": "Active", "addedDate": datetime(2023, 1, 1) }
+    device2_data = { "deviceName": "AirSense 11", "serialNumber": "SN2", "status": "Inactive", "addedDate": datetime(2023, 6, 1) }
+
+    mock_doc1 = MagicMock()
+    mock_doc1.id = "device-id-1"
+    mock_doc1.to_dict.return_value = device1_data
+
+    mock_doc2 = MagicMock()
+    mock_doc2.id = "device-id-2"
+    mock_doc2.to_dict.return_value = device2_data
+
+    mock_device_subcollection.stream.return_value = [mock_doc1, mock_doc2]
+
+    # Act
+    response = client.get("/api/v1/customers/me/devices")
+
+    # Assert
+    assert response.status_code == 200
+    response_data = response.json()
+    assert len(response_data) == 2
+    assert response_data[0]["deviceId"] == "device-id-1"
+    assert response_data[0]["deviceName"] == "AirSense 10"
+    assert response_data[1]["deviceId"] == "device-id-2"
+    assert response_data[1]["deviceName"] == "AirSense 11"
+    assert response_data[1]["status"] == "Inactive"
+
+@patch('app.api.v1.endpoints.customers.firestore.client')
+def test_add_mask_success(mock_firestore_client):
+    """Tests successful addition of a mask."""
+    # Arrange
+    mock_db = MagicMock()
+    mock_firestore_client.return_value = mock_db
+    mock_mask_subcollection = MagicMock()
+    mock_mask_ref = MagicMock()
+    mock_db.collection.return_value.document.return_value.collection.return_value = mock_mask_subcollection
+    # The endpoint calls .add(), which returns a tuple (update_time, document_reference)
+    mock_mask_subcollection.add.return_value = (datetime.now(timezone.utc), mock_mask_ref)
+
+    request_payload = {"maskName": "AirFit P10", "size": "M"}
+
+    mock_mask_snapshot = MagicMock()
+    mock_mask_snapshot.exists = True
+    mock_mask_snapshot.id = "new-mask-id"
+    mock_mask_snapshot.to_dict.return_value = {**request_payload, "addedDate": datetime.now(timezone.utc)}
+    mock_mask_ref.get.return_value = mock_mask_snapshot
+
+    # Act
+    response = client.post("/api/v1/customers/me/masks", json=request_payload)
+
+    # Assert
+    assert response.status_code == 201
+    mock_db.collection.return_value.document.return_value.collection.assert_called_with("masks")
+    response_data = response.json()
+    assert response_data["maskId"] == "new-mask-id"
+    assert response_data["maskName"] == "AirFit P10"

@@ -1,0 +1,30 @@
+{
+  "patientId": "ee319d58-9aeb-4af7-b156-f91540689595-123",
+  "lineId": "U1d3be3f65112ae1192c910fcfafc0ac6",
+  "displayName": "Paripol Toopiroh",
+  "title": "Mr",
+  "firstName": "Paripol",
+  "lastName": "Toopiroh",
+  "dob": "1980-05-07",
+  "location": "Megawiz Co., LTD",
+  "status": "Active",
+  "airViewNumber": "21098765432",
+  "monitoringType": "Wireless monitoring",
+  "availableData": "365 Days",
+  "dealerPatientId": "DEALER-555",
+  "setupDate": "2023-12-29T00:00:00Z",
+  "organisation": {
+    "name": "Resmed Thailand"
+  },
+  "clinicalUser": {
+    "name": "Dr. Anan"
+  },
+  "compliance": {
+    "status": "Compliant",
+    "usage_percent": 92.8
+  },
+  "dataAccess": {
+    "type": "Full",
+    "duration": "Lifetime"
+  }
+}
