@@ -1,0 +1,14 @@
+{
+  "lineId": "U1234567890abcdef1234567890abcdef",
+  "displayName": "Jane Doe",
+  "title": "Ms.",
+  "firstName": "Jane",
+  "lastName": "Doe",
+  "dob": "1990-01-25",
+  "location": "New York",
+  "status": "Active",
+  "airViewNumber": "21987654321",
+  "monitoringType": "Wireless",
+  "availableData": "365 Days",
+  "dealerPatientId": "DEALER-007"
+}

@@ -1,0 +1,14 @@
+{
+  "deviceName": "ResMed AirSense 11",
+  "serialNumber": "23229876543",
+  "status": "Active",
+  "settings": {
+    "mode": "APAP",
+    "minPressure": 6,
+    "maxPressure": 16,
+    "rampTime": "Auto",
+    "humidityLevel": 5,
+    "epr": "On",
+    "eprLevel": 2
+  }
+}

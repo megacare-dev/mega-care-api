@@ -1,0 +1,26 @@
+{
+  "reportDate": "2023-10-28",
+  "usageHours": 7.5,
+  "cheyneStokesRespiration": "00:00:00 (0.0%)",
+  "rera": 0.8,
+  "leak": {
+    "median": 4.0,
+    "percentile_95th": 22.0
+  },
+  "pressure": {
+    "median": 8.2,
+    "percentile_95th": 12.5
+  },
+  "eventsPerHour": {
+    "ahi": 2.1,
+    "central_apneas": 0.2,
+    "hypopneas": 1.9
+  },
+  "deviceSnapshot": {
+    "deviceName": "ResMed AirSense 11",
+    "serialNumber": "23229876543",
+    "mode": "APAP",
+    "minPressure": 6,
+    "maxPressure": 16
+  }
+}
