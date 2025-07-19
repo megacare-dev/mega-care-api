@@ -7,7 +7,22 @@ This document tracks the development tasks for implementing the MegaCare Connect
 This phase focuses on implementing the essential features for the patient-facing side of the application.
 
 ### 1.1. Customer Profile Management
-- [x] **Implement `POST /customers/me`:**
+- [x] **@router.get("/me", response_model=schemas.Customer)
+def get_my_profile(current_user: Dict = Depends(get_current_user)):
+    """
+    Retrieve the profile of the currently authenticated user.
+    """
+    db = firestore.client()
+    user_uid = current_user["uid"]
+    customer_ref = db.collection("customers").document(user_uid)
+    doc = customer_ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer profile not found")
+
+    response_data = doc.to_dict()
+    response_data["patientId"] = doc.id
+    return response_data
+
   - [x] Connect to Firestore.
   - [x] Check if a customer with the given UID already exists (return 409 Conflict).
   - [x] Create a new document in the `customers` collection using the user's Firebase UID as the document ID.
@@ -20,14 +35,14 @@ This phase focuses on implementing the essential features for the patient-facing
   - [x] Return the customer data.
 
 ### 1.2. Equipment Management
-- [ ] **Implement `POST /customers/me/devices`:**
-  - [ ] Add a new document to the `customers/{user_uid}/devices` sub-collection.
-  - [ ] Let Firestore auto-generate the document ID.
-  - [ ] Add `addedDate` with the current timestamp.
-  - [ ] Return the new device data including its ID.
-- [ ] **Implement `GET /customers/me/devices`:**
-  - [ ] Fetch all documents from the `customers/{user_uid}/devices` sub-collection.
-  - [ ] Return the list of devices.
+- [x] **Implement `POST /customers/me/devices`:**
+  - [x] Add a new document to the `customers/{user_uid}/devices` sub-collection.
+  - [x] Let Firestore auto-generate the document ID.
+  - [x] Add `addedDate` with the current timestamp.
+  - [x] Return the new device data including its ID.
+- [x] **Implement `GET /customers/me/devices`:**
+  - [x] Fetch all documents from the `customers/{user_uid}/devices` sub-collection.
+  - [x] Return the list of devices.
 - [ ] **Create & Implement Mask Endpoints:**
   - [ ] Create `POST /customers/me/masks` endpoint in `customers.py`.
   - [ ] Implement logic to add a mask to the `masks` sub-collection.
