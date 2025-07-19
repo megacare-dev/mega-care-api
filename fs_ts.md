@@ -1,4 +1,9 @@
 MegaCare Connect API Specification
+
+*   **Project name**: mega-care-dev
+*   **Project number**: 15106852528
+*   **Project ID**: mega-care-dev
+*   **Github Repo**: https://github.com/megacare-dev/mega-care-api
 This document provides the complete functional and technical specifications for the backend API of the MegaCare Connect application.
 
 1. Functional Specification
@@ -342,3 +347,81 @@ Stores daily report data extracted from PDFs or other sources. The document ID i
 | `pressure`                | `map`       | A map containing median and 95th percentile pressure. |
 | `eventsPerHour`           | `map`       | A map of all respiratory events per hour (AHI, etc.). |
 | `deviceSnapshot`          | `map`       | A snapshot of the device settings during the report.  |
+
+## 3. Development and Deployment
+
+This section provides instructions for setting up the local development environment and deploying the application to Google Cloud Run.
+
+### 3.1. Local Development Setup
+
+Follow these steps to run the API on your local machine for development and testing.
+
+**Prerequisites:**
+- Python 3.8+
+- `pip` and `venv`
+- Google Cloud SDK (`gcloud` CLI) installed and authenticated.
+
+**Steps:**
+
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository_url>
+    cd mega-care-api
+    ```
+
+2.  **Create and activate a virtual environment:**
+    ```bash
+    # For macOS/Linux
+    python3 -m venv venv
+    source venv/bin/activate
+
+    # For Windows
+    python -m venv venv
+    .\venv\Scripts\activate
+    ```
+
+3.  **Install dependencies:**
+    (Assuming a `requirements.txt` file exists in the project root)
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4.  **Set up Firebase/Firestore Authentication:**
+    To connect to Firestore from your local machine, you need to authenticate using a service account.
+    a. In the Google Cloud Console, create a service account.
+    b. Grant the service account the "Cloud Datastore User" or "Editor" role for your project.
+    c. Create a JSON key for the service account and download it to a secure location on your computer.
+    d. Set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to the path of the downloaded JSON key file.
+    ```bash
+    # For macOS/Linux (add this to your .bashrc or .zshrc for persistence)
+    export GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/keyfile.json"
+    ```
+
+5.  **Run the application:**
+    Use `uvicorn` to start the local server. The `--reload` flag will automatically restart the server when code changes are detected.
+    ```bash
+    uvicorn app.main:app --reload
+    ```
+    The API will be available at `http://1227.0.0.1:8000`. You can access the interactive documentation at `http://127.0.0.1:8000/docs`.
+
+### 3.2. Deployment to Google Cloud Run
+
+Deployment is automated using Google Cloud Build, as defined in `cloudbuild.yaml`.
+
+**Prerequisites:**
+- A Google Cloud Project with billing enabled.
+- The following APIs enabled: Cloud Build API, Cloud Run Admin API, Artifact Registry API.
+- Your Google Cloud user account must have permissions to submit builds (e.g., "Cloud Build Editor" role).
+
+**Deployment Steps:**
+
+1.  **Ensure your `gcloud` CLI is configured for the correct project:**
+    ```bash
+    gcloud config set project YOUR_PROJECT_ID
+    ```
+
+2.  **Submit the build:**
+    From the root directory of the project, run the following command. This will trigger Cloud Build to execute the steps in `cloudbuild.yaml`.
+    ```bash
+    gcloud builds submit --config cloudbuild.yaml .
+    ```

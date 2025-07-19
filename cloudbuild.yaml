@@ -49,9 +49,6 @@ steps:
       - "managed"
       # Best Practice: Secure the service. Access should be via API Gateway.
       - "--no-allow-unauthenticated"
-      # Link secrets from Secret Manager to environment variables.
-      # Assumes a secret named 'LINE_CHANNEL_ID' exists in Secret Manager.
-      - "--update-secrets=LINE_CHANNEL_ID=LINE_CHANNEL_ID:latest"
       - "--project"
       - "${PROJECT_ID}"
       - "--timeout=600s" # Increase timeout to 10 minutes (default is 5 minutes)
