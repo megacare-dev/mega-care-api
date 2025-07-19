@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, status, HTTPException, Query
 from typing import List, Dict
-from datetime import datetime
+from datetime import datetime, date
 import logging
 from firebase_admin import firestore
 
@@ -37,6 +37,11 @@ def create_customer_profile(
 
     customer_data = customer_in.dict()
     customer_data["setupDate"] = datetime.utcnow()
+
+    # Convert date object to datetime object for Firestore compatibility
+    if isinstance(customer_data.get("dob"), date):
+        customer_data["dob"] = datetime.combine(customer_data["dob"], datetime.min.time())
+
     logging.info(f"Data to be written for UID {user_uid}: {customer_data}")
 
     try:
@@ -239,10 +244,23 @@ def submit_daily_report(
     report_ref = db.collection("customers").document(user_uid).collection("dailyReports").document(report_id)
 
     report_data = report_in.dict()
+    # Convert date object to datetime object for Firestore compatibility
+    if isinstance(report_data.get("reportDate"), date):
+        report_data["reportDate"] = datetime.combine(report_data["reportDate"], datetime.min.time())
+
     report_ref.set(report_data)
 
-    response_data = report_data
-    response_data["reportId"] = report_id
+    # Fetch the document back to ensure a consistent response and confirm the write.
+    new_report_doc = report_ref.get()
+    if not new_report_doc.exists:
+        logging.error(f"Data for report {report_id} was not found immediately after write for UID {user_uid}.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve report after creation."
+        )
+
+    response_data = new_report_doc.to_dict()
+    response_data["reportId"] = new_report_doc.id
     return response_data
 
 
