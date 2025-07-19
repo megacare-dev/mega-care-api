@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status
 from typing import List, Dict
 
 from app.api.v1 import schemas
-from app.api.v1.deps import get_current_user
+from app.dependencies.auth import get_current_user
 
 router = APIRouter()
 
