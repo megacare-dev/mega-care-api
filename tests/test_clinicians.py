@@ -96,10 +96,10 @@ def test_get_assigned_patients_success(mock_firestore_client):
     assert response.status_code == 200
     response_data = response.json()
     assert len(response_data) == 2
-    assert response_data[0]["patientId"] == FAKE_PATIENT_UID_1
-    assert response_data[0]["firstName"] == "Patient"
-    assert response_data[1]["patientId"] == FAKE_PATIENT_UID_2
-    assert response_data[1]["lastName"] == "Two"
+    assert response_data[0]["patient_id"] == FAKE_PATIENT_UID_1
+    assert response_data[0]["first_name"] == "Patient"
+    assert response_data[1]["patient_id"] == FAKE_PATIENT_UID_2
+    assert response_data[1]["last_name"] == "Two"
 
 @patch('app.api.v1.endpoints.clinicians.firestore.client')
 def test_get_assigned_patients_clinician_not_found(mock_firestore_client):
@@ -187,12 +187,12 @@ def test_get_patient_daily_reports_success(mock_firestore_client):
     assert response.status_code == 200
     response_data = response.json()
     assert len(response_data) == 2
-    assert response_data[0]["reportId"] == "2023-10-27"
-    assert response_data[0]["usageHours"] == 8.0
-    assert response_data[1]["reportId"] == "2023-10-26"
+    assert response_data[0]["report_id"] == "2023-10-27"
+    assert response_data[0]["usage_hours"] == 8.0
+    assert response_data[1]["report_id"] == "2023-10-26"
 
     # Verify query parameters were used
-    mock_reports_ref.order_by.assert_called_with("reportDate", direction=Query.DESCENDING)
+    mock_reports_ref.order_by.assert_called_with("reportDate", direction=Query.DESCENDING) # type: ignore
     mock_reports_ref.order_by.return_value.limit.assert_called_with(5)
 
 @patch('app.api.v1.endpoints.clinicians.firestore.client')

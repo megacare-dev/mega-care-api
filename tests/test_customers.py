@@ -66,9 +66,9 @@ def test_create_customer_profile_success(mock_firestore_client):
     mock_customer_ref.get.side_effect = [mock_doc_nonexistent, mock_doc_existent]
 
     request_payload = {
-        "displayName": "Paripol Live Test 1",
-        "firstName": "Paripol",
-        "lastName": "Tester",
+        "display_name": "Paripol Live Test 1",
+        "first_name": "Paripol",
+        "last_name": "Tester",
         "dob": "1992-05-20",
         "status": "Active"
     }
@@ -89,17 +89,17 @@ def test_create_customer_profile_success(mock_firestore_client):
     data_sent_to_firestore = call_args[0]
     
     assert isinstance(data_sent_to_firestore["dob"], datetime)
-    assert data_sent_to_firestore["dob"] == datetime(1992, 5, 20, 0, 0)
-    assert "setupDate" in data_sent_to_firestore
-    assert isinstance(data_sent_to_firestore["setupDate"], datetime)
+    assert data_sent_to_firestore["dob"] == datetime(1992, 5, 20, 0, 0) # type: ignore
+    assert "setupDate" in data_sent_to_firestore # type: ignore
+    assert isinstance(data_sent_to_firestore["setupDate"], datetime) # type: ignore
     
     # Verify the response payload
     response_data = response.json()
-    assert response_data["patientId"] == FAKE_USER_UID
-    assert response_data["firstName"] == "Paripol"
+    assert response_data["patient_id"] == FAKE_USER_UID
+    assert response_data["first_name"] == "Paripol"
     # Pydantic model `Customer` has `dob: date`, so FastAPI serializes it back to a string
-    assert response_data["dob"] == "1992-05-20" # type: ignore
-    assert "setupDate" in response_data
+    assert response_data["dob"] == "1992-05-20"
+    assert "setup_date" in response_data
 
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
@@ -132,8 +132,11 @@ def test_update_customer_profile_success(mock_firestore_client):
     mock_customer_ref.get.side_effect = [mock_doc_existent_before, mock_doc_existent_after]
 
     request_payload = {
-        "displayName": "Paripol Live Test Updated", "firstName": "Paripol",
-        "lastName": "Tester", "dob": "1992-05-20", "status": "Active"
+        "display_name": "Paripol Live Test Updated",
+        "first_name": "Paripol",
+        "last_name": "Tester",
+        "dob": "1992-05-20",
+        "status": "Active"
     }
 
     # Act
@@ -150,8 +153,8 @@ def test_update_customer_profile_success(mock_firestore_client):
     assert call_kwargs.get("merge") is True # Should be called with merge=True
 
     response_data = response.json()
-    assert response_data["displayName"] == "Paripol Live Test Updated"
-    assert response_data["patientId"] == FAKE_USER_UID
+    assert response_data["display_name"] == "Paripol Live Test Updated"
+    assert response_data["patient_id"] == FAKE_USER_UID
 
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
@@ -182,10 +185,10 @@ def test_get_my_profile_success(mock_firestore_client):
     # Assert
     assert response.status_code == 200
     response_data = response.json()
-    assert response_data["patientId"] == FAKE_USER_UID
-    assert response_data["firstName"] == "Paripol"
+    assert response_data["patient_id"] == FAKE_USER_UID
+    assert response_data["first_name"] == "Paripol"
     assert response_data["dob"] == "1992-05-20"
-    assert response_data["setupDate"] == "2023-01-01T12:00:00" # type: ignore
+    assert response_data["setup_date"] == "2023-01-01T12:00:00"
 
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
@@ -227,11 +230,11 @@ def test_submit_daily_report_success(mock_firestore_client):
     report_datetime_obj = datetime(2023, 10, 26, 0, 0)
     
     request_payload = {
-        "reportDate": report_date_str,
-        "usageHours": 8.5,
+        "report_date": report_date_str,
+        "usage_hours": 8.5,
         "leak": {"median": 5.0, "95th_percentile": 20.0},
         "pressure": {"median": 8.0, "95th_percentile": 12.0},
-        "eventsPerHour": {"ahi": 4.2}
+        "events_per_hour": {"ahi": 4.2}
     }
     
     # Mock the .get() call that happens after .set()
@@ -239,11 +242,11 @@ def test_submit_daily_report_success(mock_firestore_client):
     mock_report_snapshot.exists = True
     mock_report_snapshot.id = report_date_str
     mock_report_snapshot.to_dict.return_value = {
-        "reportDate": report_datetime_obj,
-        "usageHours": 8.5,
+        "reportDate": report_datetime_obj, # type: ignore
+        "usageHours": 8.5, # type: ignore
         "leak": {"median": 5.0, "95th_percentile": 20.0},
         "pressure": {"median": 8.0, "95th_percentile": 12.0},
-        "eventsPerHour": {"ahi": 4.2}
+        "eventsPerHour": {"ahi": 4.2} # type: ignore
     }
     mock_report_ref.get.return_value = mock_report_snapshot
 
@@ -262,14 +265,14 @@ def test_submit_daily_report_success(mock_firestore_client):
     call_args, _ = mock_report_ref.set.call_args
     data_sent_to_firestore = call_args[0]
     
-    assert isinstance(data_sent_to_firestore["reportDate"], datetime)
-    assert data_sent_to_firestore["reportDate"] == report_datetime_obj
+    assert isinstance(data_sent_to_firestore["reportDate"], datetime) # type: ignore
+    assert data_sent_to_firestore["reportDate"] == report_datetime_obj # type: ignore
     
     # Verify response
     response_data = response.json()
-    assert response_data["reportId"] == report_date_str
-    assert response_data["reportDate"] == report_date_str
-    assert response_data["usageHours"] == 8.5
+    assert response_data["report_id"] == report_date_str
+    assert response_data["report_date"] == report_date_str
+    assert response_data["usage_hours"] == 8.5
 
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
@@ -287,8 +290,8 @@ def test_add_device_success(mock_firestore_client):
     mock_device_subcollection.add.return_value = (datetime.now(timezone.utc), mock_device_ref)
 
     request_payload = {
-        "deviceName": "AirSense 10",
-        "serialNumber": "SN123456789",
+        "device_name": "AirSense 10",
+        "serial_number": "SN123456789",
         "status": "Active"
     }
 
@@ -297,7 +300,7 @@ def test_add_device_success(mock_firestore_client):
     mock_device_snapshot.exists = True
     mock_device_snapshot.id = "new-device-id"
     mock_device_snapshot.to_dict.return_value = {
-        **request_payload,
+        "deviceName": "AirSense 10", "serialNumber": "SN123456789", "status": "Active",
         "addedDate": datetime.now(timezone.utc)
     }
     mock_device_ref.get.return_value = mock_device_snapshot
@@ -316,15 +319,15 @@ def test_add_device_success(mock_firestore_client):
     mock_device_subcollection.add.assert_called_once()
     call_args, _ = mock_device_subcollection.add.call_args
     data_sent_to_firestore = call_args[0]
-    assert data_sent_to_firestore["deviceName"] == "AirSense 10"
-    assert "addedDate" in data_sent_to_firestore
-    assert isinstance(data_sent_to_firestore["addedDate"], datetime)
+    assert data_sent_to_firestore["deviceName"] == "AirSense 10" # type: ignore
+    assert "addedDate" in data_sent_to_firestore # type: ignore
+    assert isinstance(data_sent_to_firestore["addedDate"], datetime) # type: ignore
 
     # Verify response
     response_data = response.json()
-    assert response_data["deviceId"] == "new-device-id"
-    assert response_data["deviceName"] == "AirSense 10"
-    assert "addedDate" in response_data
+    assert response_data["device_id"] == "new-device-id"
+    assert response_data["device_name"] == "AirSense 10"
+    assert "added_date" in response_data
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
 def test_get_my_devices_success(mock_firestore_client):
@@ -357,10 +360,10 @@ def test_get_my_devices_success(mock_firestore_client):
     assert response.status_code == 200
     response_data = response.json()
     assert len(response_data) == 2
-    assert response_data[0]["deviceId"] == "device-id-1"
-    assert response_data[0]["deviceName"] == "AirSense 10"
-    assert response_data[1]["deviceId"] == "device-id-2"
-    assert response_data[1]["deviceName"] == "AirSense 11"
+    assert response_data[0]["device_id"] == "device-id-1"
+    assert response_data[0]["device_name"] == "AirSense 10"
+    assert response_data[1]["device_id"] == "device-id-2"
+    assert response_data[1]["device_name"] == "AirSense 11"
     assert response_data[1]["status"] == "Inactive"
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
@@ -375,12 +378,12 @@ def test_add_mask_success(mock_firestore_client):
     # The endpoint calls .add(), which returns a tuple (update_time, document_reference)
     mock_mask_subcollection.add.return_value = (datetime.now(timezone.utc), mock_mask_ref)
 
-    request_payload = {"maskName": "AirFit P10", "size": "M"}
+    request_payload = {"mask_name": "AirFit P10", "size": "M"}
 
     mock_mask_snapshot = MagicMock()
     mock_mask_snapshot.exists = True
     mock_mask_snapshot.id = "new-mask-id"
-    mock_mask_snapshot.to_dict.return_value = {**request_payload, "addedDate": datetime.now(timezone.utc)}
+    mock_mask_snapshot.to_dict.return_value = {"maskName": "AirFit P10", "size": "M", "addedDate": datetime.now(timezone.utc)}
     mock_mask_ref.get.return_value = mock_mask_snapshot
 
     # Act
@@ -390,8 +393,8 @@ def test_add_mask_success(mock_firestore_client):
     assert response.status_code == 201
     mock_db.collection.return_value.document.return_value.collection.assert_called_with("masks")
     response_data = response.json()
-    assert response_data["maskId"] == "new-mask-id"
-    assert response_data["maskName"] == "AirFit P10"
+    assert response_data["mask_id"] == "new-mask-id"
+    assert response_data["mask_name"] == "AirFit P10"
 
 
 @patch('app.api.v1.endpoints.customers._find_patient_in_airview')
@@ -424,7 +427,7 @@ def test_link_device_success(mock_firestore_client, mock_find_patient):
     mock_updated_doc.to_dict.return_value = final_db_data
     mock_customer_ref.get.return_value = mock_updated_doc
 
-    request_payload = {"serialNumber": "SN123456789", "deviceNumber": "DN987654321"}
+    request_payload = {"serial_number": "SN123456789", "device_number": "DN987654321"}
 
     # Act
     response = client.post("/api/v1/customers/me/link-device", json=request_payload)
@@ -437,14 +440,14 @@ def test_link_device_success(mock_firestore_client, mock_find_patient):
     call_args, call_kwargs = mock_customer_ref.set.call_args
     data_sent_to_firestore = call_args[0]
 
-    assert data_sent_to_firestore["firstName"] == "John"
-    assert data_sent_to_firestore["lineId"] == FAKE_USER_UID
-    assert isinstance(data_sent_to_firestore["dob"], datetime)
+    assert data_sent_to_firestore["firstName"] == "John" # type: ignore
+    assert data_sent_to_firestore["lineId"] == FAKE_USER_UID # type: ignore
+    assert isinstance(data_sent_to_firestore["dob"], datetime) # type: ignore
     assert call_kwargs.get("merge") is True
 
     response_data = response.json()
-    assert response_data["patientId"] == FAKE_USER_UID
-    assert response_data["firstName"] == "John"
+    assert response_data["patient_id"] == FAKE_USER_UID
+    assert response_data["first_name"] == "John"
     assert response_data["dob"] == "1985-06-15"
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
@@ -454,7 +457,7 @@ def test_link_device_not_found_in_airview(mock_find_patient, mock_firestore_clie
     # Arrange
     # mock_firestore_client is needed because the endpoint calls firestore.client() before checking AirView data.
     mock_find_patient.return_value = None
-    request_payload = {"serialNumber": "INVALID_SN", "deviceNumber": "INVALID_DN"}
+    request_payload = {"serial_number": "INVALID_SN", "device_number": "INVALID_DN"}
 
     # Act
     response = client.post("/api/v1/customers/me/link-device", json=request_payload)
