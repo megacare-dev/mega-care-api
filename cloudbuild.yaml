@@ -49,6 +49,11 @@ steps:
       - "managed"
       # Best Practice: Secure the service. Access should be via API Gateway.
       - "--allow-unauthenticated"
+      # Set environment variables. For secrets, use Secret Manager.
+      # Note: You must create a secret named 'line-channel-secret' in Secret Manager
+      # and grant the Cloud Run service account the 'Secret Manager Secret Accessor' role.
+      - "--set-env-vars=LINE_CHANNEL_ID=${_LINE_CHANNEL_ID}"
+      - "--set-secrets=LINE_CHANNEL_SECRET=line-channel-secret:latest"
       - "--project"
       - "${PROJECT_ID}"
       - "--timeout=600s" # Increase timeout to 10 minutes (default is 5 minutes)
@@ -62,6 +67,7 @@ substitutions:
   _SERVICE_NAME: "mega-care-api"
   _REPO_NAME: "mega-care-connect-repo" # The name of your Artifact Registry repo
   _LOCATION: "asia-southeast1" # The region for your services
+  _LINE_CHANNEL_ID: "2005687951"
 
 options:
   logging: CLOUD_LOGGING_ONLY

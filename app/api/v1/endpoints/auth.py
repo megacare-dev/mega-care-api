@@ -25,6 +25,8 @@ class LineProfileResponse(BaseModel):
 # --- Environment Variables ---
 # These should be set in your deployment environment (e.g., Cloud Run environment variables)
 LINE_TOKEN_URL = "https://api.line.me/oauth2/v2.1/token"
+LINE_CHANNEL_ID = os.getenv("LINE_CHANNEL_ID")
+LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 
 @router.post("/line", response_model=FirebaseCustomTokenResponse)
 async def line_login(payload: LineLoginRequest):
@@ -38,9 +40,6 @@ async def line_login(payload: LineLoginRequest):
     5.  Generates a Firebase Custom Token for that user.
     6.  Returns the Firebase Custom Token to the client.
     """
-    LINE_CHANNEL_ID = os.getenv("LINE_CHANNEL_ID")
-    LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
-
     if not LINE_CHANNEL_ID or not LINE_CHANNEL_SECRET:
         logging.error("LINE Channel ID or Secret is not configured on the server.")
         raise HTTPException(
@@ -122,9 +121,6 @@ async def get_line_profile(payload: LineLoginRequest):
     Exchanges a LINE authorization code for the user's LINE profile data.
     This endpoint does NOT create or interact with a Firebase user.
     """
-    LINE_CHANNEL_ID = os.getenv("LINE_CHANNEL_ID")
-    LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
-
     if not LINE_CHANNEL_ID or not LINE_CHANNEL_SECRET:
         logging.error("LINE Channel ID or Secret is not configured on the server.")
         raise HTTPException(
