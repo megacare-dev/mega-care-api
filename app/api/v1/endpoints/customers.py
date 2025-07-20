@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, HTTPException, Query
+from fastapi import APIRouter, Depends, status, HTTPException, Query, Response
 from typing import List, Dict
 from datetime import datetime, date, timezone
 import logging
@@ -12,31 +12,32 @@ router = APIRouter()
 # Basic logging configuration
 logging.basicConfig(level=logging.INFO)
 
-@router.post("/me", response_model=schemas.Customer, status_code=status.HTTP_201_CREATED)
-def create_customer_profile(
+@router.post("/me", response_model=schemas.Customer, status_code=status.HTTP_200_OK)
+def create_or_update_customer_profile(
     *,
     customer_in: schemas.CustomerCreate,
-    current_user: Dict = Depends(get_current_user)
+    current_user: Dict = Depends(get_current_user),
+    response: Response
 ):
     """
-    Create a new customer profile for the authenticated user.
-    The Firestore document ID will be the user's Firebase UID.
+    Create or update a customer profile for the authenticated user.
+    This endpoint is idempotent. It creates the profile if it doesn't exist
+    (e.g., if the onUserCreate cloud function failed) or updates it if it does.
     """
     db = firestore.client()
     user_uid = current_user["uid"]
-    logging.info(f"Attempting to create profile for user UID: {user_uid}")
+    logging.info(f"Attempting to create or update profile for user UID: {user_uid}")
 
     customer_ref = db.collection("customers").document(user_uid)
 
-    if customer_ref.get().exists:
-        logging.warning(f"Profile for user UID: {user_uid} already exists.")
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Customer profile already exists"
-        )
+    doc_exists = customer_ref.get().exists
 
     customer_data = customer_in.model_dump()
-    customer_data["setupDate"] = datetime.now(timezone.utc)
+
+    # Only add setupDate on initial creation
+    if not doc_exists:
+        customer_data["setupDate"] = datetime.now(timezone.utc)
+        response.status_code = status.HTTP_201_CREATED
 
     # Convert date object to datetime object for Firestore compatibility
     if isinstance(customer_data.get("dob"), date):
@@ -45,22 +46,21 @@ def create_customer_profile(
     logging.info(f"Data to be written for UID {user_uid}: {customer_data}")
 
     try:
-        write_result = customer_ref.set(customer_data)
+        # Use merge=True to perform an update/upsert
+        write_result = customer_ref.set(customer_data, merge=True)
         logging.info(f"Successfully wrote data for UID {user_uid} at {write_result.update_time}")
     except Exception as e:
         logging.error(f"Failed to write to Firestore for UID {user_uid}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Could not create customer profile in database."
+            detail="Could not create or update customer profile in database."
         )
 
     new_customer_doc = customer_ref.get()
     if not new_customer_doc.exists:
         logging.error(f"Data for UID {user_uid} was not found immediately after write.")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve customer profile after creation."
-        )
+        # This case is highly unlikely but handled for robustness
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve customer profile after creation.")
 
     response_data = new_customer_doc.to_dict()
     response_data["patientId"] = new_customer_doc.id
@@ -228,6 +228,77 @@ def get_my_air_tubing(current_user: Dict = Depends(get_current_user)):
         
     return tubes
 
+
+def _find_patient_in_airview(serial_number: str, device_number: str) -> Dict | None:
+    """
+    MOCK FUNCTION: In a real application, this would query the external AirView DB.
+    """
+    logging.info(f"Mock AirView Search for SN: {serial_number}, DN: {device_number}")
+    # For demonstration, we'll return mock data for a specific SN/DN combination.
+    if serial_number == "SN123456789" and device_number == "DN987654321":
+        logging.info("Mock AirView Search: Found matching patient.")
+        return {
+            "displayName": "John AirView",
+            "title": "Mr.",
+            "firstName": "John",
+            "lastName": "AirView",
+            "dob": date(1985, 6, 15),
+            "location": "AirView Clinic",
+            "status": "Active",
+            "airViewNumber": "AV12345",
+            "monitoringType": "Wireless",
+            "availableData": "365 days",
+            "dealerPatientId": "DEALER987",
+            "organisation": {"name": "MegaCare Hospital"},
+            "clinicalUser": {"name": "Dr. Smith"},
+        }
+    logging.warning("Mock AirView Search: No patient found.")
+    return None
+
+
+@router.post("/me/link-device", response_model=schemas.Customer, status_code=status.HTTP_200_OK)
+def link_device_to_profile(
+    *,
+    link_request: schemas.DeviceLinkRequest, # type: ignore
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Links a device (via SN/DN) to the authenticated user's profile.
+
+    This process involves looking up the device in an external system (e.g., AirView).
+    If a corresponding patient record is found, its data is used to populate
+    the user's profile in Firestore.
+    """
+    db = firestore.client()
+    user_uid = current_user["uid"]
+    customer_ref = db.collection("customers").document(user_uid)
+
+    patient_data_from_airview = _find_patient_in_airview(
+        link_request.serialNumber,
+        link_request.deviceNumber
+    )
+
+    if not patient_data_from_airview:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No patient record found for the provided Serial Number and Device Number."
+        )
+
+    if isinstance(patient_data_from_airview.get("dob"), date):
+        patient_data_from_airview["dob"] = datetime.combine(patient_data_from_airview["dob"], datetime.min.time())
+    patient_data_from_airview["lineId"] = user_uid
+
+    try:
+        customer_ref.set(patient_data_from_airview, merge=True)
+        logging.info(f"Successfully linked AirView data to profile for UID: {user_uid}")
+    except Exception as e:
+        logging.error(f"Failed to update Firestore with AirView data for UID {user_uid}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not link device to customer profile.")
+
+    updated_doc = customer_ref.get()
+    response_data = updated_doc.to_dict()
+    response_data["patientId"] = updated_doc.id
+    return response_data
 
 @router.post("/me/dailyReports", response_model=schemas.DailyReport, status_code=status.HTTP_201_CREATED)
 def submit_daily_report(

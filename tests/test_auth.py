@@ -195,3 +195,34 @@ def test_line_login_line_api_fails(mock_async_client, mock_getenv):
     # Assert
     assert response.status_code == 400
     assert "invalid authorization code" in response.json()["detail"]
+
+
+@patch('app.api.v1.endpoints.auth.os.getenv')
+@patch('app.api.v1.endpoints.auth.httpx.AsyncClient')
+@patch('app.api.v1.endpoints.auth.jwt.decode')
+def test_get_line_profile_success(mock_jwt_decode, mock_async_client, mock_getenv):
+    """
+    Tests successful retrieval of a LINE profile from an authorization code.
+    """
+    # Arrange
+    mock_getenv.side_effect = lambda key, default=None: "fake_id" if key == "LINE_CHANNEL_ID" else "fake_secret"
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id_token": FAKE_ENCODED_LINE_ID_TOKEN, "access_token": "some_access_token"}
+    mock_async_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
+
+    mock_jwt_decode.return_value = FAKE_LINE_ID_TOKEN_PAYLOAD
+
+    request_payload = {"authorization_code": "some-auth-code", "redirect_uri": "https://example.com/callback"}
+
+    # Act
+    response = client.post("/api/v1/auth/line/profile", json=request_payload)
+
+    # Assert
+    assert response.status_code == 200
+    response_data = response.json()
+    assert response_data["line_user_id"] == FAKE_LINE_USER_ID
+    assert response_data["display_name"] == FAKE_LINE_ID_TOKEN_PAYLOAD["name"]
+    assert response_data["picture_url"] == FAKE_LINE_ID_TOKEN_PAYLOAD["picture"]
+    mock_jwt_decode.assert_called_once_with(FAKE_ENCODED_LINE_ID_TOKEN, options={"verify_signature": False})

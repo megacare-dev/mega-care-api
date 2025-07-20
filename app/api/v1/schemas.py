@@ -78,6 +78,11 @@ class Device(DeviceBase):
     
     model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
+class DeviceLinkRequest(BaseModel):
+    serialNumber: str = Field(..., description="The device's unique serial number (SN).")
+    deviceNumber: str = Field(..., description="The device's unique device number (DN).")
+
+
 class MaskBase(BaseModel):
     maskName: str
     size: str

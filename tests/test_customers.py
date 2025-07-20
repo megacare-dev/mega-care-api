@@ -13,7 +13,7 @@ from app.dependencies.auth import get_current_user
 # Create a minimal FastAPI app for testing purposes
 app = FastAPI()
 # Include the router we want to test
-app.include_router(customers.router, prefix="/api/v1/customers", tags=["customers"])
+app.include_router(customers.router, prefix="/api/v1/customers", tags=["Customers"])
 
 # Define a fake user to be returned by the mocked dependency
 FAKE_USER_UID = "S1lPJz222Ih8tkm5mIKIv0c924Y2"
@@ -98,36 +98,60 @@ def test_create_customer_profile_success(mock_firestore_client):
     assert response_data["patientId"] == FAKE_USER_UID
     assert response_data["firstName"] == "Paripol"
     # Pydantic model `Customer` has `dob: date`, so FastAPI serializes it back to a string
-    assert response_data["dob"] == "1992-05-20"
+    assert response_data["dob"] == "1992-05-20" # type: ignore
     assert "setupDate" in response_data
 
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
-def test_create_customer_profile_already_exists(mock_firestore_client):
+def test_update_customer_profile_success(mock_firestore_client):
     """
-    Tests that a 409 Conflict is returned if the profile already exists.
+    Tests that an existing profile is successfully updated (upsert)
+    and returns a 200 OK status.
     """
     # Arrange
     mock_db = MagicMock()
     mock_firestore_client.return_value = mock_db
     mock_customer_ref = MagicMock()
     mock_db.collection.return_value.document.return_value = mock_customer_ref
-    
-    mock_doc_existent = MagicMock()
-    mock_doc_existent.exists = True
-    mock_customer_ref.get.return_value = mock_doc_existent
-    
+
+    # Mock that the document *already exists*
+    mock_doc_existent_before = MagicMock()
+    mock_doc_existent_before.exists = True
+
+    mock_doc_existent_after = MagicMock()
+    mock_doc_existent_after.exists = True
+    mock_doc_existent_after.id = FAKE_USER_UID
+
+    updated_db_data = {
+        "displayName": "Paripol Live Test Updated", # Updated
+        "firstName": "Paripol", "lastName": "Tester", "dob": datetime(1992, 5, 20, 0, 0),
+        "status": "Active", "setupDate": datetime(2023, 1, 1, 0, 0) # Should not be changed by update
+    }
+    mock_doc_existent_after.to_dict.return_value = updated_db_data
+
+    mock_customer_ref.get.side_effect = [mock_doc_existent_before, mock_doc_existent_after]
+
     request_payload = {
-        "displayName": "Test User", "firstName": "Test", "lastName": "User",
-        "dob": "2000-01-01", "status": "Active"
+        "displayName": "Paripol Live Test Updated", "firstName": "Paripol",
+        "lastName": "Tester", "dob": "1992-05-20", "status": "Active"
     }
 
     # Act
     response = client.post("/api/v1/customers/me", json=request_payload)
 
     # Assert
-    assert response.status_code == 409
-    assert response.json()["detail"] == "Customer profile already exists"
+    assert response.status_code == 200 # Should be 200 OK for an update
+
+    mock_customer_ref.set.assert_called_once()
+    call_args, call_kwargs = mock_customer_ref.set.call_args
+    data_sent_to_firestore = call_args[0]
+
+    assert "setupDate" not in data_sent_to_firestore # setupDate should not be added on update
+    assert call_kwargs.get("merge") is True # Should be called with merge=True
+
+    response_data = response.json()
+    assert response_data["displayName"] == "Paripol Live Test Updated"
+    assert response_data["patientId"] == FAKE_USER_UID
 
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
@@ -161,7 +185,7 @@ def test_get_my_profile_success(mock_firestore_client):
     assert response_data["patientId"] == FAKE_USER_UID
     assert response_data["firstName"] == "Paripol"
     assert response_data["dob"] == "1992-05-20"
-    assert response_data["setupDate"] == "2023-01-01T12:00:00"
+    assert response_data["setupDate"] == "2023-01-01T12:00:00" # type: ignore
 
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
@@ -368,3 +392,73 @@ def test_add_mask_success(mock_firestore_client):
     response_data = response.json()
     assert response_data["maskId"] == "new-mask-id"
     assert response_data["maskName"] == "AirFit P10"
+
+
+@patch('app.api.v1.endpoints.customers._find_patient_in_airview')
+@patch('app.api.v1.endpoints.customers.firestore.client')
+def test_link_device_success(mock_firestore_client, mock_find_patient):
+    """Tests successful linking of a device and populating the user profile."""
+    # Arrange
+    mock_db = MagicMock()
+    mock_firestore_client.return_value = mock_db
+    mock_customer_ref = MagicMock()
+    mock_db.collection.return_value.document.return_value = mock_customer_ref
+
+    airview_data = {
+        "displayName": "John AirView", "firstName": "John", "lastName": "AirView",
+        "dob": date(1985, 6, 15), "status": "Active"
+    }
+    mock_find_patient.return_value = airview_data
+
+    # Mock the .get() call that happens after the update
+    mock_updated_doc = MagicMock()
+    mock_updated_doc.exists = True
+    mock_updated_doc.id = FAKE_USER_UID
+    # Firestore stores dates as datetimes
+    # The final data must include `setupDate` as it's required by the response model.
+    # This simulates that the document already existed (e.g., from onUserCreate)
+    # before being updated with AirView data.
+    final_db_data = {
+        **airview_data, "dob": datetime(1985, 6, 15, 0, 0), "lineId": FAKE_USER_UID, "setupDate": datetime.now(timezone.utc)
+    }
+    mock_updated_doc.to_dict.return_value = final_db_data
+    mock_customer_ref.get.return_value = mock_updated_doc
+
+    request_payload = {"serialNumber": "SN123456789", "deviceNumber": "DN987654321"}
+
+    # Act
+    response = client.post("/api/v1/customers/me/link-device", json=request_payload)
+
+    # Assert
+    assert response.status_code == 200
+    mock_find_patient.assert_called_once_with("SN123456789", "DN987654321")
+
+    mock_customer_ref.set.assert_called_once()
+    call_args, call_kwargs = mock_customer_ref.set.call_args
+    data_sent_to_firestore = call_args[0]
+
+    assert data_sent_to_firestore["firstName"] == "John"
+    assert data_sent_to_firestore["lineId"] == FAKE_USER_UID
+    assert isinstance(data_sent_to_firestore["dob"], datetime)
+    assert call_kwargs.get("merge") is True
+
+    response_data = response.json()
+    assert response_data["patientId"] == FAKE_USER_UID
+    assert response_data["firstName"] == "John"
+    assert response_data["dob"] == "1985-06-15"
+
+@patch('app.api.v1.endpoints.customers.firestore.client')
+@patch('app.api.v1.endpoints.customers._find_patient_in_airview')
+def test_link_device_not_found_in_airview(mock_find_patient, mock_firestore_client):
+    """Tests 404 when the device SN/DN is not found in the external system."""
+    # Arrange
+    # mock_firestore_client is needed because the endpoint calls firestore.client() before checking AirView data.
+    mock_find_patient.return_value = None
+    request_payload = {"serialNumber": "INVALID_SN", "deviceNumber": "INVALID_DN"}
+
+    # Act
+    response = client.post("/api/v1/customers/me/link-device", json=request_payload)
+
+    # Assert
+    assert response.status_code == 404
+    assert "No patient record found" in response.json()["detail"]
