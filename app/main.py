@@ -52,19 +52,17 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return await request_validation_exception_handler(request, exc)
 
 # --- CORS Middleware ---
-# This allows the frontend application (e.g., LINE LIFF) to make requests to this API.
-origins = [
-    "https://mega-care-connect-service-15106852528.asia-southeast1.run.app",
-    # For local development and testing
-    "http://localhost",
-    "http://localhost:8080",
-    "http://127.0.0.1:5500", # Example for VS Code Live Server
-]
-
+# To allow any origin to access your API, you can use a wildcard "*".
+# This is often used for public APIs or during development to avoid CORS issues.
+#
+# IMPORTANT: According to the CORS specification, when `allow_origins` is set to a
+# wildcard ("*"), `allow_credentials` must be set to `False`. Your application uses
+# a bearer token for authentication, which is passed in a header and is not
+# affected by this `allow_credentials` setting (which primarily relates to cookies).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"], # Allows all methods (GET, POST, etc.)
     allow_headers=["*"], # Allows all headers, including Authorization
 )

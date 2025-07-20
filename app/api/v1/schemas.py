@@ -51,9 +51,9 @@ class CustomerBase(BaseModel):
     firebaseUid: Optional[str] = Field(None, description="The user's unique Firebase UID, linked after onboarding.")
     displayName: str
     title: Optional[str] = None
-    firstName: str
-    lastName: str
-    dob: date
+    firstName: Optional[str] = None
+    lastName: Optional[str] = None
+    dob: Optional[date] = None
     location: Optional[str] = None
     status: str = "Active"
     airViewNumber: Optional[str] = None
