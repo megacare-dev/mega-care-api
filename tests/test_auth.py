@@ -89,11 +89,12 @@ FAKE_LINE_ID_TOKEN_PAYLOAD = {
 FAKE_ENCODED_LINE_ID_TOKEN = "fake.encoded.id_token"
 FAKE_FIREBASE_CUSTOM_TOKEN = "fake-firebase-custom-token"
 
-@patch('app.api.v1.endpoints.auth.os.getenv')
+@patch('app.api.v1.endpoints.auth.LINE_CHANNEL_SECRET', 'fake_secret')
+@patch('app.api.v1.endpoints.auth.LINE_CHANNEL_ID', 'fake_id')
 @patch('app.api.v1.endpoints.auth.httpx.AsyncClient')
 @patch('app.api.v1.endpoints.auth.jwt.decode')
 @patch('app.api.v1.endpoints.auth.auth')
-def test_line_login_new_user_success(mock_firebase_auth, mock_jwt_decode, mock_async_client, mock_getenv):
+def test_line_login_new_user_success(mock_firebase_auth, mock_jwt_decode, mock_async_client):
     """
     Tests successful LINE login flow for a new user.
     - Exchanges auth code for LINE token.
@@ -103,8 +104,6 @@ def test_line_login_new_user_success(mock_firebase_auth, mock_jwt_decode, mock_a
     - Creates and returns a Firebase custom token.
     """
     # Arrange
-    mock_getenv.side_effect = lambda key, default=None: "fake_id" if key == "LINE_CHANNEL_ID" else "fake_secret"
-
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {"id_token": FAKE_ENCODED_LINE_ID_TOKEN, "access_token": "some_access_token"}
@@ -140,17 +139,16 @@ def test_line_login_new_user_success(mock_firebase_auth, mock_jwt_decode, mock_a
     mock_firebase_auth.create_custom_token.assert_called_once_with(FAKE_LINE_USER_ID)
 
 
-@patch('app.api.v1.endpoints.auth.os.getenv')
+@patch('app.api.v1.endpoints.auth.LINE_CHANNEL_SECRET', 'fake_secret')
+@patch('app.api.v1.endpoints.auth.LINE_CHANNEL_ID', 'fake_id')
 @patch('app.api.v1.endpoints.auth.httpx.AsyncClient')
 @patch('app.api.v1.endpoints.auth.jwt.decode')
 @patch('app.api.v1.endpoints.auth.auth')
-def test_line_login_existing_user_success(mock_firebase_auth, mock_jwt_decode, mock_async_client, mock_getenv):
+def test_line_login_existing_user_success(mock_firebase_auth, mock_jwt_decode, mock_async_client):
     """
     Tests successful LINE login flow for an existing user.
     """
     # Arrange
-    mock_getenv.side_effect = lambda key, default=None: "fake_id" if key == "LINE_CHANNEL_ID" else "fake_secret"
-
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {"id_token": FAKE_ENCODED_LINE_ID_TOKEN}
@@ -174,15 +172,14 @@ def test_line_login_existing_user_success(mock_firebase_auth, mock_jwt_decode, m
     mock_firebase_auth.create_user.assert_not_called()
 
 
-@patch('app.api.v1.endpoints.auth.os.getenv')
+@patch('app.api.v1.endpoints.auth.LINE_CHANNEL_SECRET', 'fake_secret')
+@patch('app.api.v1.endpoints.auth.LINE_CHANNEL_ID', 'fake_id')
 @patch('app.api.v1.endpoints.auth.httpx.AsyncClient')
-def test_line_login_line_api_fails(mock_async_client, mock_getenv):
+def test_line_login_line_api_fails(mock_async_client):
     """
     Tests that a 400 is returned if the LINE API call fails.
     """
     # Arrange
-    mock_getenv.side_effect = lambda key, default=None: "fake_id" if key == "LINE_CHANNEL_ID" else "fake_secret"
-    
     mock_response = MagicMock()
     mock_response.status_code = 400
     mock_response.json.return_value = {"error": "invalid_grant", "error_description": "invalid authorization code"}
@@ -197,16 +194,15 @@ def test_line_login_line_api_fails(mock_async_client, mock_getenv):
     assert "invalid authorization code" in response.json()["detail"]
 
 
-@patch('app.api.v1.endpoints.auth.os.getenv')
+@patch('app.api.v1.endpoints.auth.LINE_CHANNEL_SECRET', 'fake_secret')
+@patch('app.api.v1.endpoints.auth.LINE_CHANNEL_ID', 'fake_id')
 @patch('app.api.v1.endpoints.auth.httpx.AsyncClient')
 @patch('app.api.v1.endpoints.auth.jwt.decode')
-def test_get_line_profile_success(mock_jwt_decode, mock_async_client, mock_getenv):
+def test_get_line_profile_success(mock_jwt_decode, mock_async_client):
     """
     Tests successful retrieval of a LINE profile from an authorization code.
     """
     # Arrange
-    mock_getenv.side_effect = lambda key, default=None: "fake_id" if key == "LINE_CHANNEL_ID" else "fake_secret"
-
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {"id_token": FAKE_ENCODED_LINE_ID_TOKEN, "access_token": "some_access_token"}
