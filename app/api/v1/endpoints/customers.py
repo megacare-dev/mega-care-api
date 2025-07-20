@@ -12,27 +12,44 @@ router = APIRouter()
 @router.post("/me", response_model=schemas.Customer, status_code=status.HTTP_200_OK)
 def create_or_update_customer_profile(
     *,
-    customer_in: schemas.CustomerCreate,
+    customer_in: schemas.CustomerProfilePayload,
     current_user: Dict = Depends(get_current_user),
     response: Response
 ):
     """
     Create or update a customer profile for the authenticated user.
-    This endpoint is idempotent. It creates the profile if it doesn't exist
-    (e.g., if the onUserCreate cloud function failed) or updates it if it does.
+    This endpoint is idempotent. It creates the profile if it doesn't exist,
+    or updates it with the provided fields if it does.
     """
     db = firestore.client()
     user_uid = current_user["uid"]
     logging.info(f"Attempting to create or update profile for user UID: {user_uid}")
 
     customer_ref = db.collection("customers").document(user_uid)
+    doc = customer_ref.get()
+    doc_exists = doc.exists
 
-    doc_exists = customer_ref.get().exists
+    # Use exclude_unset=True for partial updates.
+    customer_data = customer_in.model_dump(exclude_unset=True)
 
-    customer_data = customer_in.model_dump()
+    # If displayName is not provided, try to construct it from first/last name.
+    if 'displayName' not in customer_data and 'firstName' in customer_data and 'lastName' in customer_data:
+        customer_data['displayName'] = f"{customer_data['firstName']} {customer_data['lastName']}"
 
-    # Only add setupDate on initial creation
+    # --- Validation for new profile creation ---
     if not doc_exists:
+        # For a new profile, we need a display name and a date of birth.
+        if 'displayName' not in customer_data:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="A 'display_name' or both 'first_name' and 'last_name' are required to create a profile."
+            )
+        if 'dob' not in customer_data:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="A 'dob' (date of birth) is required to create a profile."
+            )
+
         customer_data["setupDate"] = datetime.now(timezone.utc)
         response.status_code = status.HTTP_201_CREATED
 
@@ -56,7 +73,6 @@ def create_or_update_customer_profile(
     new_customer_doc = customer_ref.get()
     if not new_customer_doc.exists:
         logging.error(f"Data for UID {user_uid} was not found immediately after write.")
-        # This case is highly unlikely but handled for robustness
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve customer profile after creation.")
 
     response_data = new_customer_doc.to_dict()

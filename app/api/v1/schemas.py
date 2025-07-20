@@ -66,6 +66,26 @@ class CustomerBase(BaseModel):
         populate_by_name=True
     )
 
+class CustomerProfilePayload(BaseModel):
+    """Payload for creating or updating a customer profile with optional fields."""
+    lineId: Optional[str] = None
+    displayName: Optional[str] = None
+    title: Optional[str] = None
+    firstName: Optional[str] = None
+    lastName: Optional[str] = None
+    dob: Optional[date] = None
+    location: Optional[str] = None
+    status: Optional[str] = None
+    airViewNumber: Optional[str] = None
+    monitoringType: Optional[str] = None
+    availableData: Optional[str] = None
+    dealerPatientId: Optional[str] = None
+
+    model_config = ConfigDict(
+        alias_generator=to_snake_case,
+        populate_by_name=True
+    )
+
 class CustomerCreate(CustomerBase):
     pass
 
