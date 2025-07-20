@@ -44,11 +44,6 @@ def create_or_update_customer_profile(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="A 'display_name' or both 'first_name' and 'last_name' are required to create a profile."
             )
-        if 'dob' not in customer_data:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="A 'dob' (date of birth) is required to create a profile."
-            )
 
         customer_data["setupDate"] = datetime.now(timezone.utc)
         response.status_code = status.HTTP_201_CREATED
