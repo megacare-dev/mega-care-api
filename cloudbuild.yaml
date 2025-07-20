@@ -48,7 +48,7 @@ steps:
       - "--platform"
       - "managed"
       # Best Practice: Secure the service. Access should be via API Gateway.
-      - "--no-allow-unauthenticated"
+      - "--allow-unauthenticated"
       - "--project"
       - "${PROJECT_ID}"
       - "--timeout=600s" # Increase timeout to 10 minutes (default is 5 minutes)
