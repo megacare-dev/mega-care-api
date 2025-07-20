@@ -9,9 +9,6 @@ from app.dependencies.auth import get_current_user
 
 router = APIRouter()
 
-# Basic logging configuration
-logging.basicConfig(level=logging.INFO)
-
 @router.post("/me", response_model=schemas.Customer, status_code=status.HTTP_200_OK)
 def create_or_update_customer_profile(
     *,
