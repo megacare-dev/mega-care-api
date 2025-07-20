@@ -21,7 +21,7 @@ try:
     if not firebase_admin._apps:
         cred = credentials.ApplicationDefault()
         firebase_admin.initialize_app(cred, {
-            'projectId': os.getenv('GCP_PROJECT'),
+            'projectId': os.getenv('GOOGLE_CLOUD_PROJECT'),
         })
 except Exception as e:
     logging.error(f"Could not initialize Firebase Admin SDK: {e}")
