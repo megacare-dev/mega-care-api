@@ -38,17 +38,18 @@ app = FastAPI(
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """
-    Log detailed validation errors for 422 Unprocessable Entity responses.
-    This helps in debugging client-side requests that are malformed.
+    Custom handler to log detailed validation errors for 422 responses.
+    This helps in debugging malformed client-side requests.
+    The actual response is delegated back to FastAPI's default handler
+    to ensure it's processed correctly by middleware like CORS.
     """
     error_details = exc.errors()
     logging.error(f"422 Unprocessable Entity. Request: {request.method} {request.url}. Errors: {error_details}")
 
-    # Return the default FastAPI response structure for validation errors.
-    return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"detail": error_details},
-    )
+    # By calling the default handler, we ensure the response format is
+    # consistent and that it passes through the middleware chain correctly.
+    from fastapi.exception_handlers import request_validation_exception_handler
+    return await request_validation_exception_handler(request, exc)
 
 # --- CORS Middleware ---
 # This allows the frontend application (e.g., LINE LIFF) to make requests to this API.
