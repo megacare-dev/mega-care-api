@@ -3,6 +3,9 @@ fastapi
 uvicorn[standard] # Includes httpx for TestClient
 gunicorn
 firebase-admin
+httpx
+PyJWT
 
 # Testing Dependencies
 pytest
+

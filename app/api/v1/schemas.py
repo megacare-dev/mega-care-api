@@ -36,6 +36,7 @@ class EventsPerHourMap(BaseModel):
 # --- Customer Schemas ---
 class CustomerBase(BaseModel):
     lineId: Optional[str] = None
+    firebaseUid: Optional[str] = Field(None, description="The user's unique Firebase UID, linked after onboarding.")
     displayName: str
     title: Optional[str] = None
     firstName: str

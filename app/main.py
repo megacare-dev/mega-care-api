@@ -2,8 +2,7 @@ import os
 import firebase_admin
 from firebase_admin import credentials
 from fastapi import FastAPI
-
-from app.api.v1.endpoints import customers, clinicians
+from app.api.v1.endpoints import auth, customers, clinicians
 
 # --- Firebase Admin SDK Initialization ---
 # It's crucial to initialize the app only once.
@@ -27,6 +26,7 @@ app = FastAPI(
 )
 
 app.include_router(customers.router, prefix="/api/v1/customers", tags=["Customers"])
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(clinicians.router, prefix="/api/v1/clinician", tags=["Clinicians"])
 
 @app.get("/", tags=["Health Check"])
