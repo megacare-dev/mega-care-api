@@ -322,8 +322,10 @@ def link_device_to_profile(
 
     # 4. Merge the pre-existing data into the current user's profile to link them.
     customer_data_to_merge = pre_existing_customer_data.copy()
+    # This is the crucial step to link the LINE/Firebase user to the pre-existing profile.
+    customer_data_to_merge["lineId"] = user_uid
+    customer_data_to_merge["firebaseUid"] = user_uid
     customer_data_to_merge["patientId"] = patient_id_from_device
-
 
     current_user_customer_ref = db.collection("customers").document(user_uid)
 

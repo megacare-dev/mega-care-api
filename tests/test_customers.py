@@ -570,7 +570,11 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
 
     # Assert the copy to 'patients' collection
     mock_patients_collection.document.assert_called_once_with(DEVICE_PATIENT_ID_FIELD)
-    mock_new_patient_doc_ref.set.assert_called_once_with(pre_existing_patient_data)
+
+    # The endpoint adds the 'patientId' to the dict before setting it.
+    expected_data_for_patients_collection = pre_existing_patient_data.copy()
+    expected_data_for_patients_collection["patientId"] = DEVICE_PATIENT_ID_FIELD
+    mock_new_patient_doc_ref.set.assert_called_once_with(expected_data_for_patients_collection)
 
     # Assert the merge to 'customers' collection still happened
     mock_customers_collection.document.assert_called_once_with(FAKE_USER_UID)
