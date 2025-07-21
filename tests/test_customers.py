@@ -451,8 +451,8 @@ def test_link_device_success_no_patient_id_field(mock_firestore_client):
     mock_customers_collection.document.return_value = mock_current_user_customer_ref
 
     final_merged_data = {
-        **pre_existing_patient_data,
-        "lineId": FAKE_USER_UID, "firebaseUid": FAKE_USER_UID
+        **pre_existing_patient_data, "lineId": FAKE_USER_UID,
+        "patientId": None  # The device doc has no patientId, so this becomes None in the merge
     }
     mock_updated_doc = MagicMock()
     mock_updated_doc.exists = True
@@ -479,9 +479,9 @@ def test_link_device_success_no_patient_id_field(mock_firestore_client):
     call_args, call_kwargs = mock_current_user_customer_ref.set.call_args
     data_sent_to_firestore = call_args[0]
 
-    assert data_sent_to_firestore["firstName"] == "John"
-    assert data_sent_to_firestore["lineId"] == FAKE_USER_UID
-    assert data_sent_to_firestore["firebaseUid"] == FAKE_USER_UID
+    assert data_sent_to_firestore["firstName"] == "John" # type: ignore
+    assert data_sent_to_firestore["lineId"] == FAKE_USER_UID # type: ignore
+    assert data_sent_to_firestore["patientId"] is None # type: ignore
     assert call_kwargs.get("merge") is True
 
     response_data = response.json()
@@ -545,7 +545,11 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
     mock_current_user_customer_ref = MagicMock()
     mock_customers_collection.document.return_value = mock_current_user_customer_ref
 
-    final_merged_data = { **pre_existing_patient_data, "lineId": FAKE_USER_UID, "firebaseUid": FAKE_USER_UID }
+    final_merged_data = {
+        **pre_existing_patient_data,
+        "lineId": FAKE_USER_UID,
+        "patientId": DEVICE_PATIENT_ID_FIELD
+    }
     mock_updated_doc = MagicMock()
     mock_updated_doc.exists = True
     mock_updated_doc.id = FAKE_USER_UID

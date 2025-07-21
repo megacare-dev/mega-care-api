@@ -296,6 +296,7 @@ def link_device_to_profile(
         pre_existing_customer_ref = db.collection("customers").document(user_uid)
     pre_existing_customer_doc = pre_existing_customer_ref.get()
 
+
     if not pre_existing_customer_doc.exists:
         logging.error(f"Device {found_device_doc.id} found for SN {link_request.serialNumber}, but parent customer {pre_existing_customer_ref.id} does not exist.")
         raise HTTPException(
@@ -304,10 +305,11 @@ def link_device_to_profile(
         )
 
     pre_existing_customer_data = pre_existing_customer_doc.to_dict()
-
+    
     # 3. As per specification, copy the found customer document to a 'patients'
     # collection, using the 'patientId' from the device document as the new doc ID.
     patient_id_from_device = device_data.get("patientId")
+    pre_existing_customer_data["patientId"] = patient_id_from_device
     if patient_id_from_device:
         try:
             logging.info(f"Copying customer profile {pre_existing_customer_doc.id} to 'patients' collection with ID {patient_id_from_device}")
@@ -320,8 +322,7 @@ def link_device_to_profile(
 
     # 4. Merge the pre-existing data into the current user's profile to link them.
     customer_data_to_merge = pre_existing_customer_data.copy()
-    customer_data_to_merge["lineId"] = user_uid
-    customer_data_to_merge["firebaseUid"] = user_uid
+    customer_data_to_merge["patientId"] = patient_id_from_device
 
 
     current_user_customer_ref = db.collection("customers").document(user_uid)
