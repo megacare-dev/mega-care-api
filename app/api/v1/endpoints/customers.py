@@ -237,73 +237,74 @@ def get_my_air_tubing(current_user: Dict = Depends(get_current_user)):
     return tubes
 
 
-def _find_patient_in_airview(serial_number: str, device_number: str) -> Dict | None:
-    """
-    MOCK FUNCTION: In a real application, this would query the external AirView DB.
-    """
-    logging.info(f"Mock AirView Search for SN: {serial_number}, DN: {device_number}")
-    # For demonstration, we'll return mock data for a specific SN/DN combination.
-    if serial_number == "SN123456789" and device_number == "DN987654321":
-        logging.info("Mock AirView Search: Found matching patient.")
-        return {
-            "displayName": "John AirView",
-            "title": "Mr.",
-            "firstName": "John",
-            "lastName": "AirView",
-            "dob": date(1985, 6, 15),
-            "location": "AirView Clinic",
-            "status": "Active",
-            "airViewNumber": "AV12345",
-            "monitoringType": "Wireless",
-            "availableData": "365 days",
-            "dealerPatientId": "DEALER987",
-            "organisation": {"name": "MegaCare Hospital"},
-            "clinicalUser": {"name": "Dr. Smith"},
-        }
-    logging.warning("Mock AirView Search: No patient found.")
-    return None
-
-
 @router.post("/me/link-device", response_model=schemas.Customer, status_code=status.HTTP_200_OK)
 def link_device_to_profile(
     *,
-    link_request: schemas.DeviceLinkRequest, # type: ignore
+    link_request: schemas.DeviceLinkRequest,
     current_user: Dict = Depends(get_current_user)
 ):
     """
-    Links a device (via SN/DN) to the authenticated user's profile.
+    Links a device (via SN) to the authenticated user's profile.
 
-    This process involves looking up the device in an external system (e.g., AirView).
-    If a corresponding patient record is found, its data is used to populate
-    the user's profile in Firestore.
+    This process involves finding a pre-existing patient profile in Firestore
+    via the device's serial number. If a profile is found, its data is
+    merged into the authenticated user's profile, effectively linking them.
     """
     db = firestore.client()
     user_uid = current_user["uid"]
-    customer_ref = db.collection("customers").document(user_uid)
 
-    patient_data_from_airview = _find_patient_in_airview(
-        link_request.serialNumber,
-        link_request.deviceNumber
-    )
-
-    if not patient_data_from_airview:
+    # 1. Find the device using a collection group query.
+    # This searches all 'devices' sub-collections for a matching serial number.
+    device_query = db.collection_group("devices").where("serialNumber", "==", link_request.serialNumber).limit(1)
+    try:
+        device_docs = list(device_query.stream())
+    except Exception as e:
+        logging.error(f"Firestore query for device SN {link_request.serialNumber} failed: {e}")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No patient record found for the provided Serial Number and Device Number."
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="A database error occurred while searching for the device."
         )
 
-    if isinstance(patient_data_from_airview.get("dob"), date):
-        patient_data_from_airview["dob"] = datetime.combine(patient_data_from_airview["dob"], datetime.min.time())
-    patient_data_from_airview["lineId"] = user_uid
+    if not device_docs:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No patient record found for the provided Serial Number."
+        )
+
+    # 2. Get the parent customer profile from the found device.
+    found_device_doc = device_docs[0]
+    logging.info(f"Found device doc with ID: {found_device_doc.id} for SN: {link_request.serialNumber}. Data: {found_device_doc.to_dict()}")
+    # The device doc's parent is the 'devices' collection, whose parent is the customer document.
+    pre_existing_customer_ref = found_device_doc.reference.parent.parent
+    pre_existing_customer_doc = pre_existing_customer_ref.get()
+
+    if not pre_existing_customer_doc.exists:
+        logging.error(f"Device {found_device_doc.id} found for SN {link_request.serialNumber}, but parent customer {pre_existing_customer_ref.id} does not exist.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="A device was found, but its associated patient profile is missing."
+        )
+
+    # 3. Merge the pre-existing data into the current user's profile.
+    customer_data_to_merge = pre_existing_customer_doc.to_dict()
+    customer_data_to_merge["lineId"] = user_uid
+    customer_data_to_merge["firebaseUid"] = user_uid
+
+    current_user_customer_ref = db.collection("customers").document(user_uid)
 
     try:
-        customer_ref.set(patient_data_from_airview, merge=True)
-        logging.info(f"Successfully linked AirView data to profile for UID: {user_uid}")
+        current_user_customer_ref.set(customer_data_to_merge, merge=True)
+        logging.info(f"Successfully merged data from profile {pre_existing_customer_doc.id} to profile {user_uid}")
     except Exception as e:
-        logging.error(f"Failed to update Firestore with AirView data for UID {user_uid}: {e}")
+        logging.error(f"Failed to merge Firestore data for UID {user_uid}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not link device to customer profile.")
 
-    updated_doc = customer_ref.get()
+    # 4. Return the updated profile of the current user.
+    updated_doc = current_user_customer_ref.get()
+    if not updated_doc.exists:
+        logging.error(f"Data for UID {user_uid} was not found immediately after merge.")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve customer profile after linking.")
+
     response_data = updated_doc.to_dict()
     response_data["patientId"] = updated_doc.id
     return response_data

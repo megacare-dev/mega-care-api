@@ -397,35 +397,51 @@ def test_add_mask_success(mock_firestore_client):
     assert response_data["mask_name"] == "AirFit P10"
 
 
-@patch('app.api.v1.endpoints.customers._find_patient_in_airview')
 @patch('app.api.v1.endpoints.customers.firestore.client')
-def test_link_device_success(mock_firestore_client, mock_find_patient):
-    """Tests successful linking of a device and populating the user profile."""
+def test_link_device_success(mock_firestore_client):
+    """
+    Tests successful linking of a device by finding a pre-existing profile
+    in Firestore and merging it into the current user's profile.
+    """
     # Arrange
     mock_db = MagicMock()
     mock_firestore_client.return_value = mock_db
-    mock_customer_ref = MagicMock()
-    mock_db.collection.return_value.document.return_value = mock_customer_ref
 
-    airview_data = {
-        "displayName": "John AirView", "firstName": "John", "lastName": "AirView",
-        "dob": date(1985, 6, 15), "status": "Active"
+    # --- Mocking the Collection Group Query ---
+    PRE_EXISTING_PATIENT_ID = "patient-abc-123"
+    pre_existing_patient_data = {
+        "displayName": "John Firestore", "firstName": "John", "lastName": "Firestore",
+        "dob": datetime(1985, 6, 15, 0, 0), "status": "Active"
     }
-    mock_find_patient.return_value = airview_data
+    mock_pre_existing_customer_doc = MagicMock()
+    mock_pre_existing_customer_doc.exists = True
+    mock_pre_existing_customer_doc.to_dict.return_value = pre_existing_patient_data
+    mock_pre_existing_customer_ref = MagicMock()
+    mock_pre_existing_customer_ref.id = PRE_EXISTING_PATIENT_ID
+    mock_pre_existing_customer_ref.get.return_value = mock_pre_existing_customer_doc
 
-    # Mock the .get() call that happens after the update
+    # Mock the Firestore document hierarchy: customer_ref -> devices_collection_ref -> device_doc_ref
+    mock_devices_collection_ref = MagicMock()
+    mock_devices_collection_ref.parent = mock_pre_existing_customer_ref
+
+    mock_device_doc = MagicMock()
+    mock_device_doc.reference.parent = mock_devices_collection_ref
+    mock_db.collection_group.return_value.where.return_value.limit.return_value.stream.return_value = [mock_device_doc]
+
+    # --- Mocking the Update/Get of the Current User's Profile ---
+    mock_current_user_customer_ref = MagicMock()
+    mock_db.collection.return_value.document.return_value = mock_current_user_customer_ref
+
+    final_merged_data = {
+        **pre_existing_patient_data,
+        "lineId": FAKE_USER_UID, "firebaseUid": FAKE_USER_UID,
+        "patientId": FAKE_USER_UID, "setupDate": datetime.now(timezone.utc)
+    }
     mock_updated_doc = MagicMock()
     mock_updated_doc.exists = True
     mock_updated_doc.id = FAKE_USER_UID
-    # Firestore stores dates as datetimes
-    # The final data must include `setupDate` as it's required by the response model.
-    # This simulates that the document already existed (e.g., from onUserCreate)
-    # before being updated with AirView data.
-    final_db_data = {
-        **airview_data, "dob": datetime(1985, 6, 15, 0, 0), "lineId": FAKE_USER_UID, "setupDate": datetime.now(timezone.utc)
-    }
-    mock_updated_doc.to_dict.return_value = final_db_data
-    mock_customer_ref.get.return_value = mock_updated_doc
+    mock_updated_doc.to_dict.return_value = final_merged_data
+    mock_current_user_customer_ref.get.return_value = mock_updated_doc
 
     request_payload = {"serial_number": "SN123456789", "device_number": "DN987654321"}
 
@@ -434,15 +450,18 @@ def test_link_device_success(mock_firestore_client, mock_find_patient):
 
     # Assert
     assert response.status_code == 200
-    mock_find_patient.assert_called_once_with("SN123456789", "DN987654321")
+    mock_db.collection_group.assert_called_once_with("devices")
+    mock_db.collection_group.return_value.where.assert_called_once_with("serialNumber", "==", "SN123456789")
+    mock_db.collection.assert_called_once_with("customers")
+    mock_db.collection.return_value.document.assert_called_once_with(FAKE_USER_UID)
 
-    mock_customer_ref.set.assert_called_once()
-    call_args, call_kwargs = mock_customer_ref.set.call_args
+    mock_current_user_customer_ref.set.assert_called_once()
+    call_args, call_kwargs = mock_current_user_customer_ref.set.call_args
     data_sent_to_firestore = call_args[0]
 
-    assert data_sent_to_firestore["firstName"] == "John" # type: ignore
-    assert data_sent_to_firestore["lineId"] == FAKE_USER_UID # type: ignore
-    assert isinstance(data_sent_to_firestore["dob"], datetime) # type: ignore
+    assert data_sent_to_firestore["firstName"] == "John"
+    assert data_sent_to_firestore["lineId"] == FAKE_USER_UID
+    assert data_sent_to_firestore["firebaseUid"] == FAKE_USER_UID
     assert call_kwargs.get("merge") is True
 
     response_data = response.json()
@@ -451,12 +470,12 @@ def test_link_device_success(mock_firestore_client, mock_find_patient):
     assert response_data["dob"] == "1985-06-15"
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
-@patch('app.api.v1.endpoints.customers._find_patient_in_airview')
-def test_link_device_not_found_in_airview(mock_find_patient, mock_firestore_client):
-    """Tests 404 when the device SN/DN is not found in the external system."""
+def test_link_device_not_found_in_firestore(mock_firestore_client):
+    """Tests 404 when the device SN is not found in Firestore."""
     # Arrange
-    # mock_firestore_client is needed because the endpoint calls firestore.client() before checking AirView data.
-    mock_find_patient.return_value = None
+    mock_db = MagicMock()
+    mock_firestore_client.return_value = mock_db
+    mock_db.collection_group.return_value.where.return_value.limit.return_value.stream.return_value = []
     request_payload = {"serial_number": "INVALID_SN", "device_number": "INVALID_DN"}
 
     # Act
