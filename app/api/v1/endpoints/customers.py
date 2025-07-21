@@ -283,16 +283,17 @@ def link_device_to_profile(
     # If the device is not in a sub-collection (i.e., it's in a root collection),
     # it might have a reference field to the patient.
     if not pre_existing_customer_ref:
-        # Based on logs, the linking field is 'patients_id'.
-        patient_id = device_data.get("patients_id")
+        # The device document is not in a standard 'customers/{uid}/devices/{id}' path.
+        # Check for a reference field within the device document itself.
+        patient_id = device_data.get("patientId")
         if not patient_id:
-            logging.error(f"Device {found_device_doc.id} is a root-level document but does not contain a patient reference field like 'patients_id'.")
+            logging.error(f"Device {found_device_doc.id} is a root-level document but does not contain a patient reference field like 'patientId'.")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Device found, but it is not linked to any patient profile."
             )
-        logging.info(f"Device is a root document. Looking up customer via 'patients_id' field: {patient_id}")
-        pre_existing_customer_ref = db.collection("customers").document(patient_id)
+        logging.info(f"Device is a root document. Looking up customer via 'user_uid' field: {user_uid}")
+        pre_existing_customer_ref = db.collection("customers").document(user_uid)
     pre_existing_customer_doc = pre_existing_customer_ref.get()
 
     if not pre_existing_customer_doc.exists:
