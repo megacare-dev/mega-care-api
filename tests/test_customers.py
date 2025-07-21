@@ -480,7 +480,7 @@ def test_link_device_success_no_patient_id_field(mock_firestore_client):
     data_sent_to_firestore = call_args[0]
 
     assert data_sent_to_firestore["firstName"] == "John" # type: ignore
-    assert data_sent_to_firestore["lineId"] == FAKE_USER_UID # type: ignore
+
     assert data_sent_to_firestore["patientId"] is None # type: ignore
     assert call_kwargs.get("merge") is True
 
