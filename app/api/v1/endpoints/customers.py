@@ -249,6 +249,8 @@ def link_device_to_profile(
     This process involves finding a pre-existing patient profile in Firestore
     via the device's serial number. If a profile is found, its data is
     merged into the authenticated user's profile, effectively linking them.
+    It also copies the found profile to a 'patients' collection if the
+    device document contains a 'patientId' field.
     """
     db = firestore.client()
     user_uid = current_user["uid"]
@@ -273,9 +275,24 @@ def link_device_to_profile(
 
     # 2. Get the parent customer profile from the found device.
     found_device_doc = device_docs[0]
-    logging.info(f"Found device doc with ID: {found_device_doc.id} for SN: {link_request.serialNumber}. Data: {found_device_doc.to_dict()}")
+    device_data = found_device_doc.to_dict()
+    logging.info(f"Found device doc with ID: {found_device_doc.id} for SN: {link_request.serialNumber}. Data: {device_data}")
     # The device doc's parent is the 'devices' collection, whose parent is the customer document.
     pre_existing_customer_ref = found_device_doc.reference.parent.parent
+
+    # If the device is not in a sub-collection (i.e., it's in a root collection),
+    # it might have a reference field to the patient.
+    if not pre_existing_customer_ref:
+        # Based on logs, the linking field is 'patients_id'.
+        patient_id = device_data.get("patients_id")
+        if not patient_id:
+            logging.error(f"Device {found_device_doc.id} is a root-level document but does not contain a patient reference field like 'patients_id'.")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Device found, but it is not linked to any patient profile."
+            )
+        logging.info(f"Device is a root document. Looking up customer via 'patients_id' field: {patient_id}")
+        pre_existing_customer_ref = db.collection("customers").document(patient_id)
     pre_existing_customer_doc = pre_existing_customer_ref.get()
 
     if not pre_existing_customer_doc.exists:
@@ -285,10 +302,26 @@ def link_device_to_profile(
             detail="A device was found, but its associated patient profile is missing."
         )
 
-    # 3. Merge the pre-existing data into the current user's profile.
-    customer_data_to_merge = pre_existing_customer_doc.to_dict()
+    pre_existing_customer_data = pre_existing_customer_doc.to_dict()
+
+    # 3. As per specification, copy the found customer document to a 'patients'
+    # collection, using the 'patientId' from the device document as the new doc ID.
+    patient_id_from_device = device_data.get("patientId")
+    if patient_id_from_device:
+        try:
+            logging.info(f"Copying customer profile {pre_existing_customer_doc.id} to 'patients' collection with ID {patient_id_from_device}")
+            db.collection("patients").document(patient_id_from_device).set(pre_existing_customer_data)
+        except Exception as e:
+            # This is treated as a non-critical error. The primary linking can still proceed.
+            logging.warning(f"Could not copy profile to 'patients' collection for patientId {patient_id_from_device}: {e}")
+    else:
+        logging.info(f"Device document {found_device_doc.id} does not contain a 'patientId' field. Skipping copy to 'patients' collection.")
+
+    # 4. Merge the pre-existing data into the current user's profile to link them.
+    customer_data_to_merge = pre_existing_customer_data.copy()
     customer_data_to_merge["lineId"] = user_uid
     customer_data_to_merge["firebaseUid"] = user_uid
+
 
     current_user_customer_ref = db.collection("customers").document(user_uid)
 
@@ -299,7 +332,7 @@ def link_device_to_profile(
         logging.error(f"Failed to merge Firestore data for UID {user_uid}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not link device to customer profile.")
 
-    # 4. Return the updated profile of the current user.
+    # 5. Return the updated profile of the current user.
     updated_doc = current_user_customer_ref.get()
     if not updated_doc.exists:
         logging.error(f"Data for UID {user_uid} was not found immediately after merge.")

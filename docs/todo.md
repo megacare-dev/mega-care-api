@@ -107,13 +107,12 @@ This phase outlines the server-side authentication flow using LINE Login and the
 - [ ] **(Optional) Implement LINE Profile Retrieval Endpoint: `POST /api/v1/auth/line/profile`**
   - [ ] Create an endpoint to exchange a LINE authorization code for the user's LINE profile data, without creating a Firebase user.
 
-- [x] **Implement Device Linking Endpoint: `POST /api/v1/customers/me/link-device`**
-  - [x] This endpoint will be protected and require a standard Firebase Auth ID Token.
-  - [x] Receive the device Serial Number (SN) from the client.
-  - [x] Find the device in the `devices` sub-collection group using the provided SN.
-  - [x] If a matching device is found, get its parent customer profile.
-  - [x] If a matching device and patient profile are found, merge the found patient data into the authenticated user's profile document.
-  - [x] Return the updated user profile on success or an error on failure.
+- [ ] **Implement Device Linking Endpoint: `POST /api/v1/customers/me/link-device`**
+  - [ ] This endpoint will be protected and require a standard Firebase Auth ID Token.
+  - [ ] Receive the device Serial Number (SN) from the client.
+  - [ ] Find the device in the `devices` sub-collection group using the provided SN.
+  - [ ] If a matching device is found, get its parent customer profile and add it customer document to patients collection by use document id from collection devices field patientId.
+  - [ ] Return the updated user profile on success or an error on failure.
 
 - [ ] **(Recommended) Create Firestore User on Auth Creation**
   - [ ] Implement a Firebase Cloud Function with an `onUserCreate` trigger.
