@@ -45,7 +45,7 @@ def create_or_update_customer_profile(
                 detail="A 'display_name' or both 'first_name' and 'last_name' are required to create a profile."
             )
 
-        customer_data["setupDate"] = datetime.now(timezone.utc)
+        customer_data["createDate"] = datetime.now(timezone.utc)
         response.status_code = status.HTTP_201_CREATED
 
     # Convert date object to datetime object for Firestore compatibility

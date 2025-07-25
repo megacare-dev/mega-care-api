@@ -60,6 +60,7 @@ class CustomerBase(BaseModel):
     monitoringType: Optional[str] = None
     availableData: Optional[str] = None
     dealerPatientId: Optional[str] = None
+    lineProfile: Optional['LineUserProfile'] = None
 
     model_config = ConfigDict(
         alias_generator=to_snake_case,
@@ -80,6 +81,7 @@ class CustomerProfilePayload(BaseModel):
     monitoringType: Optional[str] = None
     availableData: Optional[str] = None
     dealerPatientId: Optional[str] = None
+    lineProfile: Optional['LineUserProfile'] = None
 
     model_config = ConfigDict(
         alias_generator=to_snake_case,
@@ -91,7 +93,7 @@ class CustomerCreate(CustomerBase):
 
 class Customer(CustomerBase):
     patientId: str
-    setupDate: datetime
+    createDate: datetime
     organisation: Optional[OrganisationMap] = None
     clinicalUser: Optional[ClinicalUserMap] = None
     compliance: Optional[ComplianceMap] = None
@@ -133,7 +135,7 @@ class LineUserProfile(BaseModel):
     Represents the user profile information retrieved from the LINE Profile API.
     """
     user_id: str = Field(..., alias="userId", description="The user's unique ID from LINE.")
-    display_name: str = Field(..., alias="displayName", description="The user's display name from their LINE profile.")
+    display_name: Optional[str] = Field(None, alias="displayName", description="The user's display name from their LINE profile.")
     picture_url: Optional[str] = Field(None, alias="pictureUrl", description="URL of the user's profile image from LINE.")
     status_message: Optional[str] = Field(None, alias="statusMessage", description="The user's status message from their LINE profile.")
 

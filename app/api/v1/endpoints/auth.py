@@ -97,20 +97,35 @@ async def line_login(payload: LineLoginRequest):
         logging.info(f"Found existing Firebase user for LINE ID: {line_user_id}")
     except auth.UserNotFoundError:
         logging.info(f"Creating new Firebase user for LINE ID: {line_user_id}")
+
+        # The Customer schema requires a non-null displayName. Use a fallback if LINE doesn't provide one.
+        customer_display_name = display_name or f"User...{line_user_id[-6:]}"
+
         firebase_user = auth.create_user(
             uid=line_user_id,
-            display_name=display_name,
+            display_name=customer_display_name,
             photo_url=picture_url
         )
         # --- Create corresponding customer profile in Firestore ---
         try:
             db = firestore.client()
+
+            # The embedded lineProfile reflects the raw data from LINE.
+            line_profile_data = {
+                "userId": line_user_id,
+                "displayName": display_name,  # This can be None
+                "pictureUrl": picture_url,    # This can be None
+            }
+            # Remove keys with None values to keep Firestore document clean
+            line_profile_data = {k: v for k, v in line_profile_data.items() if v is not None}
+
             # This mirrors the basic profile created via the main endpoint
             customer_data = {
                 "lineId": line_user_id,
-                "displayName": display_name,
+                "displayName": customer_display_name,
                 "status": "Active",
-                "setupDate": datetime.now(timezone.utc)
+                "createDate": datetime.now(timezone.utc),
+                "lineProfile": line_profile_data
             }
             db.collection("customers").document(line_user_id).set(customer_data)
             logging.info(f"Created initial customer profile in Firestore for UID: {line_user_id}")

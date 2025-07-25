@@ -57,8 +57,9 @@ def test_get_assigned_patients_success(mock_firestore_client):
         "firstName": "Patient",
         "lastName": "One",
         "dob": datetime(1990, 1, 1),
-        "setupDate": datetime.now(),
-        "status": "Active"
+        "createDate": datetime.now(),
+        "status": "Active",
+        "lineProfile": None
     }
     mock_patient_ref_1 = MagicMock()
     mock_patient_ref_1.get.return_value = mock_patient_doc_1
@@ -67,8 +68,9 @@ def test_get_assigned_patients_success(mock_firestore_client):
     mock_patient_doc_2.exists = True
     mock_patient_doc_2.id = FAKE_PATIENT_UID_2
     mock_patient_doc_2.to_dict.return_value = {
-        "displayName": "Patient Two",
-        "firstName": "Patient", "lastName": "Two", "dob": datetime(1991, 2, 2), "setupDate": datetime.now(), "status": "Active"
+        "displayName": "Patient Two", "firstName": "Patient",
+        "lastName": "Two", "dob": datetime(1991, 2, 2),
+        "createDate": datetime.now(), "status": "Active", "lineProfile": None
     }
     mock_patient_ref_2 = MagicMock()
     mock_patient_ref_2.get.return_value = mock_patient_doc_2

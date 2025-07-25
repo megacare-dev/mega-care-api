@@ -58,7 +58,8 @@ def test_create_customer_profile_success(mock_firestore_client):
         "lastName": "Tester",
         "dob": datetime(1992, 5, 20, 0, 0),
         "status": "Active",
-        "setupDate": datetime.now(timezone.utc) # The exact value is set in the endpoint
+        "createDate": datetime.now(timezone.utc), # The exact value is set in the endpoint
+        "lineProfile": None
     }
     mock_doc_existent.to_dict.return_value = expected_db_data
     
@@ -90,8 +91,8 @@ def test_create_customer_profile_success(mock_firestore_client):
     
     assert isinstance(data_sent_to_firestore["dob"], datetime)
     assert data_sent_to_firestore["dob"] == datetime(1992, 5, 20, 0, 0) # type: ignore
-    assert "setupDate" in data_sent_to_firestore # type: ignore
-    assert isinstance(data_sent_to_firestore["setupDate"], datetime) # type: ignore
+    assert "createDate" in data_sent_to_firestore # type: ignore
+    assert isinstance(data_sent_to_firestore["createDate"], datetime) # type: ignore
     
     # Verify the response payload
     response_data = response.json()
@@ -99,7 +100,7 @@ def test_create_customer_profile_success(mock_firestore_client):
     assert response_data["first_name"] == "Paripol"
     # Pydantic model `Customer` has `dob: date`, so FastAPI serializes it back to a string
     assert response_data["dob"] == "1992-05-20"
-    assert "setup_date" in response_data
+    assert "create_date" in response_data
 
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
@@ -125,7 +126,8 @@ def test_update_customer_profile_success(mock_firestore_client):
     updated_db_data = {
         "displayName": "Paripol Live Test Updated", # Updated
         "firstName": "Paripol", "lastName": "Tester", "dob": datetime(1992, 5, 20, 0, 0),
-        "status": "Active", "setupDate": datetime(2023, 1, 1, 0, 0) # Should not be changed by update
+        "status": "Active", "createDate": datetime(2023, 1, 1, 0, 0), # Should not be changed by update
+        "lineProfile": None
     }
     mock_doc_existent_after.to_dict.return_value = updated_db_data
 
@@ -149,7 +151,7 @@ def test_update_customer_profile_success(mock_firestore_client):
     call_args, call_kwargs = mock_customer_ref.set.call_args
     data_sent_to_firestore = call_args[0]
 
-    assert "setupDate" not in data_sent_to_firestore # setupDate should not be added on update
+    assert "createDate" not in data_sent_to_firestore # createDate should not be added on update
     assert call_kwargs.get("merge") is True # Should be called with merge=True
 
     response_data = response.json()
@@ -174,7 +176,8 @@ def test_get_my_profile_success(mock_firestore_client):
     db_data = {
         "displayName": "Paripol Tester", "firstName": "Paripol", "lastName": "Tester",
         "dob": datetime(1992, 5, 20, 0, 0), "status": "Active",
-        "setupDate": datetime(2023, 1, 1, 12, 0, 0)
+        "createDate": datetime(2023, 1, 1, 12, 0, 0),
+        "lineProfile": None
     }
     mock_doc.to_dict.return_value = db_data
     mock_customer_ref.get.return_value = mock_doc
@@ -188,7 +191,7 @@ def test_get_my_profile_success(mock_firestore_client):
     assert response_data["patient_id"] == FAKE_USER_UID
     assert response_data["first_name"] == "Paripol"
     assert response_data["dob"] == "1992-05-20"
-    assert response_data["setup_date"] == "2023-01-01T12:00:00"
+    assert response_data["create_date"] == "2023-01-01T12:00:00"
 
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
@@ -413,7 +416,7 @@ def test_link_device_success_no_patient_id_field(mock_firestore_client):
     pre_existing_patient_data = {
         "displayName": "John Firestore", "firstName": "John", "lastName": "Firestore",
         "dob": datetime(1985, 6, 15, 0, 0), "status": "Active",
-        "setupDate": datetime(2023, 1, 1)
+        "createDate": datetime(2023, 1, 1)
     }
     mock_pre_existing_customer_doc = MagicMock()
     mock_pre_existing_customer_doc.exists = True
@@ -452,7 +455,8 @@ def test_link_device_success_no_patient_id_field(mock_firestore_client):
 
     final_merged_data = {
         **pre_existing_patient_data, "lineId": FAKE_USER_UID,
-        "patientId": None  # The device doc has no patientId, so this becomes None in the merge
+        "patientId": None,  # The device doc has no patientId, so this becomes None in the merge
+        "lineProfile": None
     }
     mock_updated_doc = MagicMock()
     mock_updated_doc.exists = True
@@ -488,7 +492,7 @@ def test_link_device_success_no_patient_id_field(mock_firestore_client):
     assert response_data["patient_id"] == FAKE_USER_UID
     assert response_data["first_name"] == "John"
     assert response_data["dob"] == "1985-06-15"
-    assert "setup_date" in response_data
+    assert "create_date" in response_data
 
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
@@ -508,7 +512,7 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
     pre_existing_patient_data = {
         "displayName": "John Firestore", "firstName": "John", "lastName": "Firestore",
         "dob": datetime(1985, 6, 15, 0, 0), "status": "Active",
-        "setupDate": datetime(2023, 1, 1)
+        "createDate": datetime(2023, 1, 1)
     }
     mock_pre_existing_customer_doc = MagicMock()
     mock_pre_existing_customer_doc.exists = True
@@ -548,7 +552,8 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
     final_merged_data = {
         **pre_existing_patient_data,
         "lineId": FAKE_USER_UID,
-        "patientId": DEVICE_PATIENT_ID_FIELD
+        "patientId": DEVICE_PATIENT_ID_FIELD,
+        "lineProfile": None
     }
     mock_updated_doc = MagicMock()
     mock_updated_doc.exists = True

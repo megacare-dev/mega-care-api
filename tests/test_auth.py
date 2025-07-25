@@ -113,8 +113,12 @@ def test_line_login_new_user_creates_firestore_profile(
     assert data_sent_to_firestore["lineId"] == FAKE_LINE_USER_ID
     assert data_sent_to_firestore["displayName"] == FAKE_DISPLAY_NAME
     assert data_sent_to_firestore["status"] == "Active"
-    assert "setupDate" in data_sent_to_firestore
-    assert isinstance(data_sent_to_firestore["setupDate"], datetime)
+    assert "createDate" in data_sent_to_firestore
+    assert isinstance(data_sent_to_firestore["createDate"], datetime)
+    assert "lineProfile" in data_sent_to_firestore
+    assert data_sent_to_firestore["lineProfile"]["userId"] == FAKE_LINE_USER_ID
+    assert data_sent_to_firestore["lineProfile"]["displayName"] == FAKE_DISPLAY_NAME
+    assert data_sent_to_firestore["lineProfile"]["pictureUrl"] == FAKE_PICTURE_URL
 
 
 @patch('app.api.v1.endpoints.auth.LINE_CHANNEL_SECRET', 'fake_channel_secret')
