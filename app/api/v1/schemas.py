@@ -138,6 +138,7 @@ class LineUserProfile(BaseModel):
     display_name: Optional[str] = Field(None, alias="displayName", description="The user's display name from their LINE profile.")
     picture_url: Optional[str] = Field(None, alias="pictureUrl", description="URL of the user's profile image from LINE.")
     status_message: Optional[str] = Field(None, alias="statusMessage", description="The user's status message from their LINE profile.")
+    email: Optional[str] = Field(None, description="The user's email from their LINE profile. Requires 'email' scope.")
 
     model_config = ConfigDict(
         populate_by_name=True,

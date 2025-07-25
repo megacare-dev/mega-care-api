@@ -23,6 +23,7 @@ class LineProfileResponse(BaseModel):
     line_user_id: str = Field(..., description="The user's unique ID from LINE.")
     display_name: str | None = Field(None, description="The user's display name from their LINE profile.")
     picture_url: str | None = Field(None, description="URL of the user's profile image from LINE.")
+    email: str | None = Field(None, description="The user's email address from LINE.")
 
 # --- Environment Variables ---
 # These should be set in your deployment environment (e.g., Cloud Run environment variables)
@@ -87,6 +88,7 @@ async def line_login(payload: LineLoginRequest):
         
         display_name = decoded_id_token.get("name")
         picture_url = decoded_id_token.get("picture")
+        email = decoded_id_token.get("email")
 
     except Exception as e:
         logging.error(f"Failed to decode or process LINE ID token: {e}")
@@ -116,7 +118,8 @@ async def line_login(payload: LineLoginRequest):
             line_profile = schemas.LineUserProfile(
                 user_id=line_user_id,
                 display_name=display_name,
-                picture_url=picture_url
+                picture_url=picture_url,
+                email=email
             )
             # model_dump(by_alias=True) will use 'userId', 'displayName', etc.
             # exclude_none=True will remove fields that are None.
@@ -197,7 +200,12 @@ async def get_line_profile(payload: LineLoginRequest):
         if not line_user_id:
             raise ValueError("LINE User ID (sub) not found in ID token.")
 
-        return LineProfileResponse(line_user_id=line_user_id, display_name=decoded_id_token.get("name"), picture_url=decoded_id_token.get("picture"))
+        return LineProfileResponse(
+            line_user_id=line_user_id,
+            display_name=decoded_id_token.get("name"),
+            picture_url=decoded_id_token.get("picture"),
+            email=decoded_id_token.get("email")
+        )
     except Exception as e:
         logging.error(f"Failed to decode or process LINE ID token: {e}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid ID token from LINE.")
