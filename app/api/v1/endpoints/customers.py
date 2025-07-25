@@ -338,7 +338,32 @@ def link_device_to_profile(
         logging.error(f"Failed to merge Firestore data for UID {user_uid}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not link device to customer profile.")
 
-    # 5. Return the updated profile of the current user.
+    # 5. Create a record of the linked device in the user's 'devices' sub-collection.
+    # This ensures the device used for linking is now associated with the user's profile.
+    try:
+        # Using 'devices' collection for consistency with other endpoints like /me/devices.
+        devices_ref = current_user_customer_ref.collection("devices")
+
+        # Prepare the data for the new device document, conforming to DeviceBase + addedDate.
+        # This combines data from the found device and the link request.
+        new_device_data = {
+            "deviceName": device_data.get("deviceName", "Unknown Device"),
+            "serialNumber": link_request.serialNumber,
+            "deviceNumber": link_request.deviceNumber,
+            "status": device_data.get("status", "Active"),
+            "settings": device_data.get("settings"),
+            "addedDate": datetime.now(timezone.utc)
+        }
+
+        # Clean the dict from None values before saving to Firestore
+        new_device_data_cleaned = {k: v for k, v in new_device_data.items() if v is not None}
+
+        devices_ref.add(new_device_data_cleaned)
+        logging.info(f"Successfully created a new device entry for user {user_uid} from the linking process.")
+    except Exception as e:
+        logging.warning(f"Could not create device entry for user {user_uid} after linking: {e}")
+
+    # 6. Return the updated profile of the current user.
     updated_doc = current_user_customer_ref.get()
     if not updated_doc.exists:
         logging.error(f"Data for UID {user_uid} was not found immediately after merge.")

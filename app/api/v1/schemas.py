@@ -148,6 +148,7 @@ class LineUserProfile(BaseModel):
 class DeviceBase(BaseModel):
     deviceName: str
     serialNumber: str
+    deviceNumber: str = Field(..., min_length=3, max_length=3, description="The device's unique 3-digit device number (DN).")
     status: str = "Active"
     settings: Optional[Dict] = None
 
@@ -171,7 +172,7 @@ class Device(DeviceBase):
 
 class DeviceLinkRequest(BaseModel):
     serialNumber: str = Field(..., description="The device's unique serial number (SN).")
-    deviceNumber: str = Field(..., description="The device's unique device number (DN).")
+    deviceNumber: str = Field(..., min_length=3, max_length=3, description="The device's unique 3-digit device number (DN).")
 
     model_config = ConfigDict(
         alias_generator=to_snake_case,

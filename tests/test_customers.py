@@ -295,6 +295,7 @@ def test_add_device_success(mock_firestore_client):
     request_payload = {
         "device_name": "AirSense 10",
         "serial_number": "SN123456789",
+        "device_number": "123",
         "status": "Active"
     }
 
@@ -303,7 +304,7 @@ def test_add_device_success(mock_firestore_client):
     mock_device_snapshot.exists = True
     mock_device_snapshot.id = "new-device-id"
     mock_device_snapshot.to_dict.return_value = {
-        "deviceName": "AirSense 10", "serialNumber": "SN123456789", "status": "Active",
+        "deviceName": "AirSense 10", "serialNumber": "SN123456789", "deviceNumber": "123", "status": "Active",
         "addedDate": datetime.now(timezone.utc)
     }
     mock_device_ref.get.return_value = mock_device_snapshot
@@ -323,6 +324,7 @@ def test_add_device_success(mock_firestore_client):
     call_args, _ = mock_device_subcollection.add.call_args
     data_sent_to_firestore = call_args[0]
     assert data_sent_to_firestore["deviceName"] == "AirSense 10" # type: ignore
+    assert data_sent_to_firestore["deviceNumber"] == "123" # type: ignore
     assert "addedDate" in data_sent_to_firestore # type: ignore
     assert isinstance(data_sent_to_firestore["addedDate"], datetime) # type: ignore
 
@@ -343,8 +345,8 @@ def test_get_my_devices_success(mock_firestore_client):
     mock_db.collection.return_value.document.return_value.collection.return_value = mock_device_subcollection
 
     # Mock two device documents being returned
-    device1_data = { "deviceName": "AirSense 10", "serialNumber": "SN1", "status": "Active", "addedDate": datetime(2023, 1, 1) }
-    device2_data = { "deviceName": "AirSense 11", "serialNumber": "SN2", "status": "Inactive", "addedDate": datetime(2023, 6, 1) }
+    device1_data = { "deviceName": "AirSense 10", "serialNumber": "SN1", "deviceNumber": "123", "status": "Active", "addedDate": datetime(2023, 1, 1) }
+    device2_data = { "deviceName": "AirSense 11", "serialNumber": "SN2", "deviceNumber": "456", "status": "Inactive", "addedDate": datetime(2023, 6, 1) }
 
     mock_doc1 = MagicMock()
     mock_doc1.id = "device-id-1"
@@ -365,9 +367,11 @@ def test_get_my_devices_success(mock_firestore_client):
     assert len(response_data) == 2
     assert response_data[0]["device_id"] == "device-id-1"
     assert response_data[0]["device_name"] == "AirSense 10"
+    assert response_data[0]["device_number"] == "123"
     assert response_data[1]["device_id"] == "device-id-2"
     assert response_data[1]["device_name"] == "AirSense 11"
     assert response_data[1]["status"] == "Inactive"
+    assert response_data[1]["device_number"] == "456"
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
 def test_add_mask_success(mock_firestore_client):
@@ -430,7 +434,7 @@ def test_link_device_success_no_patient_id_field(mock_firestore_client):
     mock_devices_collection_ref.parent = mock_pre_existing_customer_ref
 
     # Device data WITHOUT 'patientId' field
-    mock_device_data = {"serialNumber": "SN123456789"}
+    mock_device_data = {"serialNumber": "SN123456789", "deviceNumber": "987"}
     mock_device_doc = MagicMock()
     mock_device_doc.id = "device-doc-id"
     mock_device_doc.reference.parent = mock_devices_collection_ref
@@ -451,6 +455,10 @@ def test_link_device_success_no_patient_id_field(mock_firestore_client):
 
     # --- Mocking the Update/Get of the Current User's Profile ---
     mock_current_user_customer_ref = MagicMock()
+    # Mock the 'devices' sub-collection on the user's ref
+    mock_user_devices_collection = MagicMock()
+    mock_current_user_customer_ref.collection.return_value = mock_user_devices_collection
+
     mock_customers_collection.document.return_value = mock_current_user_customer_ref
 
     final_merged_data = {
@@ -464,7 +472,7 @@ def test_link_device_success_no_patient_id_field(mock_firestore_client):
     mock_updated_doc.to_dict.return_value = final_merged_data
     mock_current_user_customer_ref.get.return_value = mock_updated_doc
 
-    request_payload = {"serial_number": "SN123456789", "device_number": "DN987654321"}
+    request_payload = {"serial_number": "SN123456789", "device_number": "987"}
 
     # Act
     response = client.post("/api/v1/customers/me/link-device", json=request_payload)
@@ -487,6 +495,16 @@ def test_link_device_success_no_patient_id_field(mock_firestore_client):
 
     assert data_sent_to_firestore["patientId"] is None # type: ignore
     assert call_kwargs.get("merge") is True
+
+    # Assert that the device was added to the user's sub-collection
+    mock_current_user_customer_ref.collection.assert_called_once_with("devices")
+    mock_user_devices_collection.add.assert_called_once()
+    call_args, _ = mock_user_devices_collection.add.call_args
+    added_device_data = call_args[0]
+    assert added_device_data["serialNumber"] == "SN123456789"
+    assert added_device_data["deviceNumber"] == "987"
+    assert "deviceName" in added_device_data
+    assert "addedDate" in added_device_data
 
     response_data = response.json()
     assert response_data["patient_id"] == FAKE_USER_UID
@@ -525,7 +543,7 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
     mock_devices_collection_ref.parent = mock_pre_existing_customer_ref
 
     # This is the key part: the device document now has a 'patientId'
-    mock_device_data = {"serialNumber": "SN123456789", "patientId": DEVICE_PATIENT_ID_FIELD}
+    mock_device_data = {"serialNumber": "SN123456789", "patientId": DEVICE_PATIENT_ID_FIELD, "deviceNumber": "987"}
     mock_device_doc = MagicMock()
     mock_device_doc.reference.parent = mock_devices_collection_ref
     mock_device_doc.to_dict.return_value = mock_device_data
@@ -547,6 +565,10 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
 
     # --- Mocking the Update/Get of the Current User's Profile ---
     mock_current_user_customer_ref = MagicMock()
+    # Mock the 'devices' sub-collection on the user's ref
+    mock_user_devices_collection = MagicMock()
+    mock_current_user_customer_ref.collection.return_value = mock_user_devices_collection
+
     mock_customers_collection.document.return_value = mock_current_user_customer_ref
 
     final_merged_data = {
@@ -565,7 +587,7 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
     mock_new_patient_doc_ref = MagicMock()
     mock_patients_collection.document.return_value = mock_new_patient_doc_ref
 
-    request_payload = {"serial_number": "SN123456789", "device_number": "DN987654321"}
+    request_payload = {"serial_number": "SN123456789", "device_number": "987"}
 
     # Act
     response = client.post("/api/v1/customers/me/link-device", json=request_payload)
@@ -586,6 +608,10 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
     mock_customers_collection.document.assert_called_once_with(FAKE_USER_UID)
     mock_current_user_customer_ref.set.assert_called_once()
 
+    # Assert that the device was also added to the user's 'devices' sub-collection
+    mock_current_user_customer_ref.collection.assert_called_once_with("devices")
+    mock_user_devices_collection.add.assert_called_once()
+
 @patch('app.api.v1.endpoints.customers.firestore.client')
 def test_link_device_not_found_in_firestore(mock_firestore_client):
     """Tests 404 when the device SN is not found in Firestore."""
@@ -593,7 +619,7 @@ def test_link_device_not_found_in_firestore(mock_firestore_client):
     mock_db = MagicMock()
     mock_firestore_client.return_value = mock_db
     mock_db.collection_group.return_value.where.return_value.limit.return_value.stream.return_value = []
-    request_payload = {"serial_number": "INVALID_SN", "device_number": "INVALID_DN"}
+    request_payload = {"serial_number": "INVALID_SN", "device_number": "999"}
 
     # Act
     response = client.post("/api/v1/customers/me/link-device", json=request_payload)
