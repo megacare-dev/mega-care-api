@@ -323,22 +323,33 @@ def link_device_to_profile(
     else:
         logging.info(f"Device document {found_device_doc.id} does not contain a 'patientId' field. Skipping copy to 'patients' collection.")
 
-    # 4. Merge the pre-existing data into the current user's profile to link them.
-    customer_data_to_merge = pre_existing_customer_data.copy()
-    # Add the patientId from the device to the data being merged into the
-    # current user's customer profile. This establishes the link.
-    customer_data_to_merge["patientId"] = patient_id_from_device
-
+    # 4. Fetch the current user's profile to preserve key identity fields like lineProfile.
     current_user_customer_ref = db.collection("customers").document(user_uid)
+    current_user_doc = current_user_customer_ref.get()
+    current_user_data = current_user_doc.to_dict() if current_user_doc.exists else {}
+
+    # 5. Manually merge data to ensure the user's LINE identity is the source of truth.
+    # Start with the pre-existing data as the base.
+    data_to_write = pre_existing_customer_data.copy()
+
+    # Preserve key fields from the current user's profile (from LINE login).
+    if "lineProfile" in current_user_data:
+        data_to_write["lineProfile"] = current_user_data["lineProfile"]
+    if "lineId" in current_user_data:
+        data_to_write["lineId"] = current_user_data["lineId"]
+
+    # Add the patientId from the device, which may link to the 'patients' collection.
+    data_to_write["patientId"] = patient_id_from_device
 
     try:
-        current_user_customer_ref.set(customer_data_to_merge, merge=True)
+        # Perform a full write of the constructed data. This is safer than a blind merge.
+        current_user_customer_ref.set(data_to_write)
         logging.info(f"Successfully merged data from profile {pre_existing_customer_doc.id} to profile {user_uid}")
     except Exception as e:
         logging.error(f"Failed to merge Firestore data for UID {user_uid}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not link device to customer profile.")
 
-    # 5. Create a record of the linked device in the user's 'devices' sub-collection.
+    # 6. Create a record of the linked device in the user's 'devices' sub-collection.
     # This ensures the device used for linking is now associated with the user's profile.
     try:
         # Using 'devices' collection for consistency with other endpoints like /me/devices.
@@ -363,7 +374,7 @@ def link_device_to_profile(
     except Exception as e:
         logging.warning(f"Could not create device entry for user {user_uid} after linking: {e}")
 
-    # 6. Return the updated profile of the current user.
+    # 7. Return the updated profile of the current user.
     updated_doc = current_user_customer_ref.get()
     if not updated_doc.exists:
         logging.error(f"Data for UID {user_uid} was not found immediately after merge.")

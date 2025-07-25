@@ -405,35 +405,35 @@ def test_add_mask_success(mock_firestore_client):
 
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
-def test_link_device_success_no_patient_id_field(mock_firestore_client):
+def test_link_device_preserves_line_profile(mock_firestore_client):
     """
-    Tests successful linking of a device by finding a pre-existing profile
-    in Firestore and merging it into the current user's profile. This test
-    verifies the case where the device document does NOT have a 'patientId' field.
+    Tests that linking a device correctly merges pre-existing data
+    while preserving the current user's lineProfile from their
+    initial login. This reflects the updated logic that avoids a blind merge.
     """
     # Arrange
     mock_db = MagicMock()
     mock_firestore_client.return_value = mock_db
 
     # --- Mocking the Collection Group Query ---
-    PRE_EXISTING_PATIENT_ID = "patient-abc-123"
-    pre_existing_patient_data = {
+    PRE_EXISTING_CUSTOMER_ID = "pre-existing-customer-123"
+    pre_existing_customer_data = {
         "displayName": "John Firestore", "firstName": "John", "lastName": "Firestore",
         "dob": datetime(1985, 6, 15, 0, 0), "status": "Active",
         "createDate": datetime(2023, 1, 1)
+        # This pre-existing profile does NOT have a lineProfile
     }
     mock_pre_existing_customer_doc = MagicMock()
     mock_pre_existing_customer_doc.exists = True
-    mock_pre_existing_customer_doc.to_dict.return_value = pre_existing_patient_data
+    mock_pre_existing_customer_doc.to_dict.return_value = pre_existing_customer_data
     mock_pre_existing_customer_ref = MagicMock()
-    mock_pre_existing_customer_ref.id = PRE_EXISTING_PATIENT_ID
+    mock_pre_existing_customer_ref.id = PRE_EXISTING_CUSTOMER_ID
     mock_pre_existing_customer_ref.get.return_value = mock_pre_existing_customer_doc
 
-    # Mock the Firestore document hierarchy: customer_ref -> devices_collection_ref -> device_doc_ref
     mock_devices_collection_ref = MagicMock()
     mock_devices_collection_ref.parent = mock_pre_existing_customer_ref
 
-    # Device data WITHOUT 'patientId' field
+    # Device data. The 'patientId' field is None/missing in this scenario.
     mock_device_data = {"serialNumber": "SN123456789", "deviceNumber": "987"}
     mock_device_doc = MagicMock()
     mock_device_doc.id = "device-doc-id"
@@ -441,36 +441,50 @@ def test_link_device_success_no_patient_id_field(mock_firestore_client):
     mock_device_doc.to_dict.return_value = mock_device_data
     mock_db.collection_group.return_value.where.return_value.limit.return_value.stream.return_value = [mock_device_doc]
 
-    # --- Mocking the Firestore collection calls ---
+    # --- Mocking the collection calls ---
     mock_customers_collection = MagicMock()
     mock_patients_collection = MagicMock()
-
     def collection_side_effect(name):
-        if name == "customers":
-            return mock_customers_collection
-        if name == "patients":
-            return mock_patients_collection
+        if name == "customers": return mock_customers_collection
+        if name == "patients": return mock_patients_collection
         return MagicMock()
     mock_db.collection.side_effect = collection_side_effect
 
+    # --- Mocking the current user's profile (the one performing the link) ---
+    # This user has just logged in with LINE and has a basic profile.
+    current_user_initial_data = {
+        "lineId": FAKE_USER_UID,
+        "displayName": "Test User From Line",
+        "status": "Active",
+        "createDate": datetime.now(timezone.utc),
+        "lineProfile": {
+            "userId": FAKE_USER_UID,
+            "displayName": "Test User From Line",
+            "pictureUrl": "http://example.com/pic.jpg"
+        }
+    }
+    mock_current_user_initial_doc = MagicMock()
+    mock_current_user_initial_doc.exists = True
+    mock_current_user_initial_doc.to_dict.return_value = current_user_initial_data
+
     # --- Mocking the Update/Get of the Current User's Profile ---
-    mock_current_user_customer_ref = MagicMock()
-    # Mock the 'devices' sub-collection on the user's ref
-    mock_user_devices_collection = MagicMock()
-    mock_current_user_customer_ref.collection.return_value = mock_user_devices_collection
-
-    mock_customers_collection.document.return_value = mock_current_user_customer_ref
-
     final_merged_data = {
-        **pre_existing_patient_data, "lineId": FAKE_USER_UID,
-        "patientId": None,  # The device doc has no patientId, so this becomes None in the merge
-        "lineProfile": None
+        **pre_existing_customer_data,
+        "lineId": FAKE_USER_UID,
+        "patientId": None, # From device_data.get("patientId")
+        "lineProfile": current_user_initial_data["lineProfile"] # Preserved from current user
     }
     mock_updated_doc = MagicMock()
     mock_updated_doc.exists = True
     mock_updated_doc.id = FAKE_USER_UID
     mock_updated_doc.to_dict.return_value = final_merged_data
-    mock_current_user_customer_ref.get.return_value = mock_updated_doc
+
+    mock_current_user_customer_ref = MagicMock()
+    mock_user_devices_collection = MagicMock()
+    mock_current_user_customer_ref.collection.return_value = mock_user_devices_collection
+    # The first .get() retrieves the initial profile, the second .get() retrieves the final one.
+    mock_current_user_customer_ref.get.side_effect = [mock_current_user_initial_doc, mock_updated_doc]
+    mock_customers_collection.document.return_value = mock_current_user_customer_ref
 
     request_payload = {"serial_number": "SN123456789", "device_number": "987"}
 
@@ -479,22 +493,24 @@ def test_link_device_success_no_patient_id_field(mock_firestore_client):
 
     # Assert
     assert response.status_code == 200
-    mock_db.collection_group.assert_called_once_with("devices")
-    mock_db.collection_group.return_value.where.assert_called_once_with("serialNumber", "==", "SN123456789")
 
+    # Assert Firestore calls
+    mock_db.collection_group.assert_called_once_with("devices")
+    mock_customers_collection.document.assert_called_once_with(FAKE_USER_UID)
     # Assert that the copy to 'patients' collection DID NOT happen
     mock_patients_collection.document.assert_not_called()
 
-    mock_customers_collection.document.assert_called_once_with(FAKE_USER_UID)
-
+    # Assert the data written to the user's profile
     mock_current_user_customer_ref.set.assert_called_once()
     call_args, call_kwargs = mock_current_user_customer_ref.set.call_args
     data_sent_to_firestore = call_args[0]
 
-    assert data_sent_to_firestore["firstName"] == "John" # type: ignore
-
-    assert data_sent_to_firestore["patientId"] is None # type: ignore
-    assert call_kwargs.get("merge") is True
+    # Key assertions for the new logic
+    assert "lineProfile" in data_sent_to_firestore
+    assert data_sent_to_firestore["lineProfile"]["userId"] == FAKE_USER_UID
+    assert data_sent_to_firestore["firstName"] == "John"
+    assert data_sent_to_firestore["patientId"] is None
+    assert "merge" not in call_kwargs # We are doing a full .set(), not a merge.
 
     # Assert that the device was added to the user's sub-collection
     mock_current_user_customer_ref.collection.assert_called_once_with("devices")
@@ -506,37 +522,39 @@ def test_link_device_success_no_patient_id_field(mock_firestore_client):
     assert "deviceName" in added_device_data
     assert "addedDate" in added_device_data
 
+    # Assert response
     response_data = response.json()
     assert response_data["patient_id"] == FAKE_USER_UID
     assert response_data["first_name"] == "John"
     assert response_data["dob"] == "1985-06-15"
-    assert "create_date" in response_data
+    assert response_data["line_profile"]["userId"] == FAKE_USER_UID
 
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
 def test_link_device_copies_to_patients_collection(mock_firestore_client):
     """
     Tests that linking a device correctly copies the pre-existing profile
-    to the 'patients' collection when the device doc has a 'patientId' field.
+    to the 'patients' collection when the device doc has a 'patientId' field,
+    and that the user's lineProfile is preserved.
     """
     # Arrange
     mock_db = MagicMock()
     mock_firestore_client.return_value = mock_db
 
     # --- Mocking the Collection Group Query ---
-    PRE_EXISTING_PATIENT_ID = "patient-abc-123"
+    PRE_EXISTING_CUSTOMER_ID = "pre-existing-customer-123"
     DEVICE_PATIENT_ID_FIELD = "new-patient-doc-id-from-device" # The ID for the new doc in 'patients'
 
-    pre_existing_patient_data = {
-        "displayName": "John Firestore", "firstName": "John", "lastName": "Firestore",
+    pre_existing_customer_data = {
+        "displayName": "Jane Firestore", "firstName": "Jane", "lastName": "Firestore",
         "dob": datetime(1985, 6, 15, 0, 0), "status": "Active",
         "createDate": datetime(2023, 1, 1)
     }
     mock_pre_existing_customer_doc = MagicMock()
     mock_pre_existing_customer_doc.exists = True
-    mock_pre_existing_customer_doc.to_dict.return_value = pre_existing_patient_data
+    mock_pre_existing_customer_doc.to_dict.return_value = pre_existing_customer_data
     mock_pre_existing_customer_ref = MagicMock()
-    mock_pre_existing_customer_ref.id = PRE_EXISTING_PATIENT_ID
+    mock_pre_existing_customer_ref.id = PRE_EXISTING_CUSTOMER_ID
     mock_pre_existing_customer_ref.get.return_value = mock_pre_existing_customer_doc
 
     mock_devices_collection_ref = MagicMock()
@@ -554,34 +572,39 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
     # --- Mocking the Firestore collection calls ---
     mock_customers_collection = MagicMock()
     mock_patients_collection = MagicMock()
-
     def collection_side_effect(name):
-        if name == "customers":
-            return mock_customers_collection
-        if name == "patients":
-            return mock_patients_collection
+        if name == "customers": return mock_customers_collection
+        if name == "patients": return mock_patients_collection
         return MagicMock() # Default mock for other collections
     mock_db.collection.side_effect = collection_side_effect
 
+    # --- Mocking the current user's profile (the one performing the link) ---
+    current_user_initial_data = {
+        "lineId": FAKE_USER_UID,
+        "displayName": "Test User From Line",
+        "lineProfile": {"userId": FAKE_USER_UID}
+    }
+    mock_current_user_initial_doc = MagicMock()
+    mock_current_user_initial_doc.exists = True
+    mock_current_user_initial_doc.to_dict.return_value = current_user_initial_data
+
     # --- Mocking the Update/Get of the Current User's Profile ---
-    mock_current_user_customer_ref = MagicMock()
-    # Mock the 'devices' sub-collection on the user's ref
-    mock_user_devices_collection = MagicMock()
-    mock_current_user_customer_ref.collection.return_value = mock_user_devices_collection
-
-    mock_customers_collection.document.return_value = mock_current_user_customer_ref
-
     final_merged_data = {
-        **pre_existing_patient_data,
+        **pre_existing_customer_data,
         "lineId": FAKE_USER_UID,
         "patientId": DEVICE_PATIENT_ID_FIELD,
-        "lineProfile": None
+        "lineProfile": current_user_initial_data["lineProfile"]
     }
     mock_updated_doc = MagicMock()
     mock_updated_doc.exists = True
     mock_updated_doc.id = FAKE_USER_UID
     mock_updated_doc.to_dict.return_value = final_merged_data
-    mock_current_user_customer_ref.get.return_value = mock_updated_doc
+
+    mock_current_user_customer_ref = MagicMock()
+    mock_user_devices_collection = MagicMock()
+    mock_current_user_customer_ref.collection.return_value = mock_user_devices_collection
+    mock_current_user_customer_ref.get.side_effect = [mock_current_user_initial_doc, mock_updated_doc]
+    mock_customers_collection.document.return_value = mock_current_user_customer_ref
 
     # --- Mocking the set call on the 'patients' collection ---
     mock_new_patient_doc_ref = MagicMock()
@@ -598,15 +621,21 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
     # Assert the copy to 'patients' collection
     mock_patients_collection.document.assert_called_once_with(DEVICE_PATIENT_ID_FIELD)
 
-    # The endpoint adds the 'customerId' (the logged-in user's UID) to the
-    # pre-existing data before copying it to the 'patients' collection.
-    expected_data_for_patients_collection = pre_existing_patient_data.copy()
+    # The endpoint adds the 'customerId' (the logged-in user's UID) to the data.
+    expected_data_for_patients_collection = pre_existing_customer_data.copy()
     expected_data_for_patients_collection["customerId"] = FAKE_USER_UID
     mock_new_patient_doc_ref.set.assert_called_once_with(expected_data_for_patients_collection, merge=True)
 
-    # Assert the merge to 'customers' collection still happened
+    # Assert the write to 'customers' collection
     mock_customers_collection.document.assert_called_once_with(FAKE_USER_UID)
     mock_current_user_customer_ref.set.assert_called_once()
+    call_args, call_kwargs = mock_current_user_customer_ref.set.call_args
+    data_sent_to_firestore = call_args[0]
+
+    assert data_sent_to_firestore["firstName"] == "Jane"
+    assert "lineProfile" in data_sent_to_firestore
+    assert data_sent_to_firestore["patientId"] == DEVICE_PATIENT_ID_FIELD
+    assert "merge" not in call_kwargs # Check that a full write was performed
 
     # Assert that the device was also added to the user's 'devices' sub-collection
     mock_current_user_customer_ref.collection.assert_called_once_with("devices")
