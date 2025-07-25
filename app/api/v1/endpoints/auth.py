@@ -4,6 +4,7 @@ import jwt
 import logging
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
+from app.api.v1 import schemas
 from firebase_admin import auth, firestore
 from datetime import datetime, timezone
 
@@ -110,14 +111,16 @@ async def line_login(payload: LineLoginRequest):
         try:
             db = firestore.client()
 
-            # The embedded lineProfile reflects the raw data from LINE.
-            line_profile_data = {
-                "userId": line_user_id,
-                "displayName": display_name,  # This can be None
-                "pictureUrl": picture_url,    # This can be None
-            }
-            # Remove keys with None values to keep Firestore document clean
-            line_profile_data = {k: v for k, v in line_profile_data.items() if v is not None}
+            # Use the Pydantic model to structure the LINE profile data.
+            # This ensures consistency with the schema definition.
+            line_profile = schemas.LineUserProfile(
+                user_id=line_user_id,
+                display_name=display_name,
+                picture_url=picture_url
+            )
+            # model_dump(by_alias=True) will use 'userId', 'displayName', etc.
+            # exclude_none=True will remove fields that are None.
+            line_profile_dict = line_profile.model_dump(by_alias=True, exclude_none=True)
 
             # This mirrors the basic profile created via the main endpoint
             customer_data = {
@@ -125,7 +128,7 @@ async def line_login(payload: LineLoginRequest):
                 "displayName": customer_display_name,
                 "status": "Active",
                 "createDate": datetime.now(timezone.utc),
-                "lineProfile": line_profile_data
+                "lineProfile": line_profile_dict
             }
             db.collection("customers").document(line_user_id).set(customer_data)
             logging.info(f"Created initial customer profile in Firestore for UID: {line_user_id}")
