@@ -313,7 +313,7 @@ def link_device_to_profile(
     if patient_id_from_device:
         try:
             logging.info(f"Copying customer profile {pre_existing_customer_doc.id} to 'patients' collection with ID {patient_id_from_device}")
-            db.collection("patients").document(patient_id_from_device).set(pre_existing_customer_data)
+            db.collection("patients").document(patient_id_from_device).set(pre_existing_customer_data, merge=True)
         except Exception as e:
             # This is treated as a non-critical error. The primary linking can still proceed.
             logging.warning(f"Could not copy profile to 'patients' collection for patientId {patient_id_from_device}: {e}")
