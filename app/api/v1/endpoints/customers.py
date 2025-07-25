@@ -309,11 +309,14 @@ def link_device_to_profile(
     # 3. As per specification, copy the found customer document to a 'patients'
     # collection, using the 'patientId' from the device document as the new doc ID.
     patient_id_from_device = device_data.get("patientId")
-    pre_existing_customer_data["patientId"] = patient_id_from_device
     if patient_id_from_device:
         try:
+            # Create a separate dictionary for the 'patients' collection to avoid
+            # mutating the original data that will be merged into the 'customers' profile.
+            data_for_patients = pre_existing_customer_data.copy()
+            data_for_patients["customerId"] = user_uid # This links the patient record back to the LINE user.
             logging.info(f"Copying customer profile {pre_existing_customer_doc.id} to 'patients' collection with ID {patient_id_from_device}")
-            db.collection("patients").document(patient_id_from_device).set(pre_existing_customer_data, merge=True)
+            db.collection("patients").document(patient_id_from_device).set(data_for_patients, merge=True)
         except Exception as e:
             # This is treated as a non-critical error. The primary linking can still proceed.
             logging.warning(f"Could not copy profile to 'patients' collection for patientId {patient_id_from_device}: {e}")
@@ -322,8 +325,8 @@ def link_device_to_profile(
 
     # 4. Merge the pre-existing data into the current user's profile to link them.
     customer_data_to_merge = pre_existing_customer_data.copy()
-    # This is the crucial step to link the patient_id to the pre-existing customer profile.
-
+    # Add the patientId from the device to the data being merged into the
+    # current user's customer profile. This establishes the link.
     customer_data_to_merge["patientId"] = patient_id_from_device
 
     current_user_customer_ref = db.collection("customers").document(user_uid)

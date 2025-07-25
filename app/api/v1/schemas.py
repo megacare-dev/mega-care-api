@@ -103,6 +103,45 @@ class Customer(CustomerBase):
         from_attributes=True
     )
 
+# --- Clinician Schemas ---
+
+class PatientDetail(BaseModel):
+    """Represents the detailed view of a patient, typically for a clinician's dashboard."""
+    patient_id: str = Field(..., alias="Patient ID")
+    title: Optional[str] = Field(None, alias="Title")
+    first_name: Optional[str] = Field(None, alias="Firstname")
+    last_name: Optional[str] = Field(None, alias="Lastname")
+    dob: Optional[date] = Field(None, alias="DOB")
+    location: Optional[str] = Field(None, alias="Location")
+    status: Optional[str] = Field(None, alias="Status")
+    organisation: Optional[str] = Field(None, alias="Organisation")
+    clinical_user: Optional[str] = Field(None, alias="Clinical user")
+    setup_date: Optional[date] = Field(None, alias="Setup date")
+    air_view_number: Optional[str] = Field(None, alias="AirView number")
+    setup_datetime: Optional[datetime] = Field(None, alias="Setup_Date")
+    customer_id: Optional[str] = Field(None, alias="Customer ID")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        from_attributes=True
+    )
+
+# --- LINE Schemas ---
+
+class LineUserProfile(BaseModel):
+    """
+    Represents the user profile information retrieved from the LINE Profile API.
+    """
+    user_id: str = Field(..., alias="userId", description="The user's unique ID from LINE.")
+    display_name: str = Field(..., alias="displayName", description="The user's display name from their LINE profile.")
+    picture_url: Optional[str] = Field(None, alias="pictureUrl", description="URL of the user's profile image from LINE.")
+    status_message: Optional[str] = Field(None, alias="statusMessage", description="The user's status message from their LINE profile.")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        from_attributes=True
+    )
+
 # --- Equipment Schemas ---
 class DeviceBase(BaseModel):
     deviceName: str

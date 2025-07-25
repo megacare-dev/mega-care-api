@@ -26,7 +26,7 @@ def get_my_profile(current_user: Dict = Depends(get_current_user)):
   - [x] Connect to Firestore.
   - [x] Check if a customer with the given UID already exists (return 409 Conflict).
   - [x] Create a new document in the `customers` collection using the user's Firebase UID as the document ID.
-  - [x] Add `setupDate` with the current timestamp.
+  - [x] Add `createDate` with the current timestamp.
   - [x] Return the newly created customer data.
 - [x] **Implement `GET /customers/me`:**
   - [x] Connect to Firestore.
@@ -104,17 +104,16 @@ This phase outlines the server-side authentication flow using LINE Login and the
   - [x] Use the LINE User ID to find or create a user in Firebase Authentication.
   - [x] Generate a Firebase Custom Token for the user and return it to the client.
 
-- [ ] **(Optional) Implement LINE Profile Retrieval Endpoint: `POST /api/v1/auth/line/profile`**
-  - [ ] Create an endpoint to exchange a LINE authorization code for the user's LINE profile data, without creating a Firebase user.
+- [x] **(Optional) Implement LINE Profile Retrieval Endpoint: `POST /api/v1/auth/line/profile`**
+  - [x] Create an endpoint to exchange a LINE authorization code for the user's LINE profile data, without creating a Firebase user. This is useful for showing a preview before full registration.
 
 - [X] **Implement Device Linking Endpoint: `POST /api/v1/customers/me/link-device`**
   - [X] This endpoint will be protected and require a standard Firebase Auth ID Token.
   - [X] Receive the device Serial Number (SN) from the client.
   - [X] Find the device in the `devices` sub-collection group using the provided SN.
-  - [X] If a matching device is found, get its parent customer profile and add it customer document to patients collection by use customer's document id 
+  - [X] If a matching device is found, get its parent customer profile and add it customer document to patients collection by use customer's document id
   - [X] Return the updated user profile on success or an error on failure.
-
-- [ ] **(Recommended) Create Firestore User on Auth Creation**
-  - [ ] Implement a Firebase Cloud Function with an `onUserCreate` trigger.
-  - [ ] This function will automatically create a corresponding user profile document in the `customers` collection in Firestore whenever a new user is created in Firebase Authentication. This ensures user data consistency.
+- [x] **(Recommended) Create Firestore User on Auth Creation**
+  - [x] The `POST /api/v1/auth/line` endpoint now creates a basic user profile in the `customers` collection when a new Firebase user is created.
+  - [ ] *Future Improvement: This could be moved to a Firebase Cloud Function with an `onUserCreate` trigger for better separation of concerns.*
   - [ ] Design the `customers` schema to potentially include a `role` field.

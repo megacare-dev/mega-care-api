@@ -2,9 +2,10 @@ import os
 import httpx
 import jwt
 import logging
-from fastapi import APIRouter, HTTPException, status, Response
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
-from firebase_admin import auth
+from firebase_admin import auth, firestore
+from datetime import datetime, timezone
 
 router = APIRouter()
 
@@ -101,6 +102,22 @@ async def line_login(payload: LineLoginRequest):
             display_name=display_name,
             photo_url=picture_url
         )
+        # --- Create corresponding customer profile in Firestore ---
+        try:
+            db = firestore.client()
+            # This mirrors the basic profile created via the main endpoint
+            customer_data = {
+                "lineId": line_user_id,
+                "displayName": display_name,
+                "status": "Active",
+                "setupDate": datetime.now(timezone.utc)
+            }
+            db.collection("customers").document(line_user_id).set(customer_data)
+            logging.info(f"Created initial customer profile in Firestore for UID: {line_user_id}")
+        except Exception as e:
+            # This is a non-critical error for the auth flow. The user can still log in,
+            # but their profile won't be pre-created. They can create it later.
+            logging.error(f"Failed to create initial Firestore profile for UID {line_user_id}: {e}")
     except Exception as e:
         logging.error(f"Firebase user lookup/creation failed: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to process user account.")
