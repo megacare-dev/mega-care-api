@@ -35,14 +35,12 @@ steps:
       - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:latest"
 
   # Grant the Cloud Build service account the Artifact Registry Tag Editor role.
-  # This is necessary for updating the 'latest' tag.
   - name: "gcr.io/cloud-builders/gcloud"
     args:
-      - "artifacts"
-      - "repositories"
+      - "projects"
       - "add-iam-policy-binding"
-      - "${_REPO_NAME}"
       - "--member=serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+      - "${PROJECT_ID}"
       - "--location"
       - "${_LOCATION}"
       - "--role=roles/artifactregistry.tagEditor"
