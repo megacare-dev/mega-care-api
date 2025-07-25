@@ -86,10 +86,11 @@ def test_create_customer_profile_success(mock_firestore_client):
     
     # This is the crucial check for the date conversion fix
     mock_customer_ref.set.assert_called_once()
-    call_args, _ = mock_customer_ref.set.call_args
+    call_args, call_kwargs = mock_customer_ref.set.call_args
     data_sent_to_firestore = call_args[0]
     
     assert isinstance(data_sent_to_firestore["dob"], datetime)
+    assert "merge" not in call_kwargs
     assert data_sent_to_firestore["dob"] == datetime(1992, 5, 20, 0, 0) # type: ignore
     assert "createDate" in data_sent_to_firestore # type: ignore
     assert isinstance(data_sent_to_firestore["createDate"], datetime) # type: ignore
@@ -104,59 +105,35 @@ def test_create_customer_profile_success(mock_firestore_client):
 
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
-def test_update_customer_profile_success(mock_firestore_client):
+def test_create_customer_profile_conflict(mock_firestore_client):
     """
-    Tests that an existing profile is successfully updated (upsert)
-    and returns a 200 OK status.
+    Tests that a 409 Conflict is returned if the profile already exists.
     """
     # Arrange
     mock_db = MagicMock()
     mock_firestore_client.return_value = mock_db
     mock_customer_ref = MagicMock()
     mock_db.collection.return_value.document.return_value = mock_customer_ref
-
+    
     # Mock that the document *already exists*
-    mock_doc_existent_before = MagicMock()
-    mock_doc_existent_before.exists = True
-
-    mock_doc_existent_after = MagicMock()
-    mock_doc_existent_after.exists = True
-    mock_doc_existent_after.id = FAKE_USER_UID
-
-    updated_db_data = {
-        "displayName": "Paripol Live Test Updated", # Updated
-        "firstName": "Paripol", "lastName": "Tester", "dob": datetime(1992, 5, 20, 0, 0),
-        "status": "Active", "createDate": datetime(2023, 1, 1, 0, 0), # Should not be changed by update
-        "lineProfile": None
-    }
-    mock_doc_existent_after.to_dict.return_value = updated_db_data
-
-    mock_customer_ref.get.side_effect = [mock_doc_existent_before, mock_doc_existent_after]
+    mock_doc_existent = MagicMock()
+    mock_doc_existent.exists = True
+    mock_customer_ref.get.return_value = mock_doc_existent
 
     request_payload = {
-        "display_name": "Paripol Live Test Updated",
-        "first_name": "Paripol",
-        "last_name": "Tester",
-        "dob": "1992-05-20",
-        "status": "Active"
+        "display_name": "Some Name",
+        "first_name": "Some",
+        "last_name": "Name",
+        "dob": "2000-01-01",
     }
 
     # Act
     response = client.post("/api/v1/customers/me", json=request_payload)
 
     # Assert
-    assert response.status_code == 200 # Should be 200 OK for an update
-
-    mock_customer_ref.set.assert_called_once()
-    call_args, call_kwargs = mock_customer_ref.set.call_args
-    data_sent_to_firestore = call_args[0]
-
-    assert "createDate" not in data_sent_to_firestore # createDate should not be added on update
-    assert call_kwargs.get("merge") is True # Should be called with merge=True
-
-    response_data = response.json()
-    assert response_data["display_name"] == "Paripol Live Test Updated"
-    assert response_data["patient_id"] == FAKE_USER_UID
+    assert response.status_code == 409
+    assert "already exists" in response.json()["detail"]
+    mock_customer_ref.set.assert_not_called()
 
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
@@ -277,6 +254,46 @@ def test_submit_daily_report_success(mock_firestore_client):
     assert response_data["report_date"] == report_date_str
     assert response_data["usage_hours"] == 8.5
 
+
+@patch('app.api.v1.endpoints.customers.firestore.client')
+def test_get_my_daily_reports_success(mock_firestore_client):
+    """Tests successful retrieval of a list of daily reports."""
+    # Arrange
+    mock_db = MagicMock()
+    mock_firestore_client.return_value = mock_db
+    mock_reports_ref = MagicMock()
+    mock_db.collection.return_value.document.return_value.collection.return_value = mock_reports_ref
+
+    report1_data = {
+        "reportDate": datetime(2023, 10, 27), "usageHours": 8.0,
+        "leak": {"median": 5.0}, "pressure": {"median": 9.0}, "eventsPerHour": {"ahi": 4.2}
+    }
+    report2_data = {
+        "reportDate": datetime(2023, 10, 26), "usageHours": 7.5,
+        "leak": {"median": 6.0}, "pressure": {"median": 9.2}, "eventsPerHour": {"ahi": 5.1}
+    }
+
+    mock_doc1 = MagicMock()
+    mock_doc1.id = "2023-10-27"
+    mock_doc1.to_dict.return_value = report1_data
+
+    mock_doc2 = MagicMock()
+    mock_doc2.id = "2023-10-26"
+    mock_doc2.to_dict.return_value = report2_data
+
+    mock_query = MagicMock()
+    mock_query.stream.return_value = [mock_doc1, mock_doc2]
+    mock_reports_ref.order_by.return_value.limit.return_value = mock_query
+
+    # Act
+    response = client.get("/api/v1/customers/me/dailyReports?limit=10")
+
+    # Assert
+    assert response.status_code == 200
+    response_data = response.json()
+    assert len(response_data) == 2
+    assert response_data[0]["report_id"] == "2023-10-27"
+    assert response_data[1]["report_id"] == "2023-10-26"
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
 def test_add_device_success(mock_firestore_client):
@@ -402,6 +419,108 @@ def test_add_mask_success(mock_firestore_client):
     response_data = response.json()
     assert response_data["mask_id"] == "new-mask-id"
     assert response_data["mask_name"] == "AirFit P10"
+
+
+@patch('app.api.v1.endpoints.customers.firestore.client')
+def test_get_my_masks_success(mock_firestore_client):
+    """Tests successful retrieval of a list of masks."""
+    # Arrange
+    mock_db = MagicMock()
+    mock_firestore_client.return_value = mock_db
+    mock_mask_subcollection = MagicMock()
+    mock_db.collection.return_value.document.return_value.collection.return_value = mock_mask_subcollection
+
+    mask1_data = {"maskName": "AirFit P10", "size": "M", "addedDate": datetime(2023, 2, 1)}
+    mask2_data = {"maskName": "AirFit F20", "size": "L", "addedDate": datetime(2023, 7, 1)}
+
+    mock_doc1 = MagicMock()
+    mock_doc1.id = "mask-id-1"
+    mock_doc1.to_dict.return_value = mask1_data
+
+    mock_doc2 = MagicMock()
+    mock_doc2.id = "mask-id-2"
+    mock_doc2.to_dict.return_value = mask2_data
+
+    mock_mask_subcollection.stream.return_value = [mock_doc1, mock_doc2]
+
+    # Act
+    response = client.get("/api/v1/customers/me/masks")
+
+    # Assert
+    assert response.status_code == 200
+    mock_db.collection.return_value.document.return_value.collection.assert_called_with("masks")
+    response_data = response.json()
+    assert len(response_data) == 2
+    assert response_data[0]["mask_id"] == "mask-id-1"
+    assert response_data[0]["mask_name"] == "AirFit P10"
+    assert response_data[1]["mask_id"] == "mask-id-2"
+    assert response_data[1]["size"] == "L"
+
+
+@patch('app.api.v1.endpoints.customers.firestore.client')
+def test_add_air_tubing_success(mock_firestore_client):
+    """Tests successful addition of air tubing."""
+    # Arrange
+    mock_db = MagicMock()
+    mock_firestore_client.return_value = mock_db
+    mock_tubing_subcollection = MagicMock()
+    mock_tubing_ref = MagicMock()
+    mock_db.collection.return_value.document.return_value.collection.return_value = mock_tubing_subcollection
+    mock_tubing_subcollection.add.return_value = (datetime.now(timezone.utc), mock_tubing_ref)
+
+    request_payload = {"tubing_name": "ClimateLineAir"}
+
+    mock_tubing_snapshot = MagicMock()
+    mock_tubing_snapshot.exists = True
+    mock_tubing_snapshot.id = "new-tubing-id"
+    mock_tubing_snapshot.to_dict.return_value = {"tubingName": "ClimateLineAir", "addedDate": datetime.now(timezone.utc)}
+    mock_tubing_ref.get.return_value = mock_tubing_snapshot
+
+    # Act
+    response = client.post("/api/v1/customers/me/airTubing", json=request_payload)
+
+    # Assert
+    assert response.status_code == 201
+    mock_db.collection.return_value.document.return_value.collection.assert_called_with("airTubing")
+    response_data = response.json()
+    assert response_data["tubing_id"] == "new-tubing-id"
+    assert response_data["tubing_name"] == "ClimateLineAir"
+
+
+@patch('app.api.v1.endpoints.customers.firestore.client')
+def test_get_my_air_tubing_success(mock_firestore_client):
+    """Tests successful retrieval of a list of air tubing."""
+    # Arrange
+    mock_db = MagicMock()
+    mock_firestore_client.return_value = mock_db
+    mock_tubing_subcollection = MagicMock()
+    mock_db.collection.return_value.document.return_value.collection.return_value = mock_tubing_subcollection
+
+    tubing1_data = {"tubingName": "ClimateLineAir", "addedDate": datetime(2023, 3, 1)}
+    tubing2_data = {"tubingName": "SlimLine", "addedDate": datetime(2023, 8, 1)}
+
+    mock_doc1 = MagicMock()
+    mock_doc1.id = "tubing-id-1"
+    mock_doc1.to_dict.return_value = tubing1_data
+
+    mock_doc2 = MagicMock()
+    mock_doc2.id = "tubing-id-2"
+    mock_doc2.to_dict.return_value = tubing2_data
+
+    mock_tubing_subcollection.stream.return_value = [mock_doc1, mock_doc2]
+
+    # Act
+    response = client.get("/api/v1/customers/me/airTubing")
+
+    # Assert
+    assert response.status_code == 200
+    mock_db.collection.return_value.document.return_value.collection.assert_called_with("airTubing")
+    response_data = response.json()
+    assert len(response_data) == 2
+    assert response_data[0]["tubing_id"] == "tubing-id-1"
+    assert response_data[0]["tubing_name"] == "ClimateLineAir"
+    assert response_data[1]["tubing_id"] == "tubing-id-2"
+    assert response_data[1]["tubing_name"] == "SlimLine"
 
 
 @patch('app.api.v1.endpoints.customers.firestore.client')

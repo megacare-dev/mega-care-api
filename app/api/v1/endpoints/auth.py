@@ -4,9 +4,7 @@ import jwt
 import logging
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
-from app.api.v1 import schemas
 from firebase_admin import auth, firestore
-from datetime import datetime, timezone
 
 router = APIRouter()
 
@@ -16,14 +14,16 @@ class LineLoginRequest(BaseModel):
     authorization_code: str = Field(..., description="The authorization code from LINE Login.")
     redirect_uri: str = Field(..., description="The redirect URI used in the initial login request.")
 
-class FirebaseCustomTokenResponse(BaseModel):
-    firebase_token: str = Field(..., description="The Firebase custom token for the client to sign in with.")
-
 class LineProfileResponse(BaseModel):
     line_user_id: str = Field(..., description="The user's unique ID from LINE.")
     display_name: str | None = Field(None, description="The user's display name from their LINE profile.")
     picture_url: str | None = Field(None, description="URL of the user's profile image from LINE.")
     email: str | None = Field(None, description="The user's email address from LINE.")
+
+class LineLoginResponse(BaseModel):
+    status: str = Field(..., description="Either 'login_success' or 'registration_required'.")
+    firebase_token: str | None = Field(default=None, description="The Firebase custom token, present on successful login.")
+    line_profile: LineProfileResponse | None = Field(default=None, description="The user's LINE profile, present if registration is required.")
 
 # --- Environment Variables ---
 # These should be set in your deployment environment (e.g., Cloud Run environment variables)
@@ -31,17 +31,17 @@ LINE_TOKEN_URL = "https://api.line.me/oauth2/v2.1/token"
 LINE_CHANNEL_ID = os.getenv("LINE_CHANNEL_ID")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 
-@router.post("/line", response_model=FirebaseCustomTokenResponse)
+@router.post("/line", response_model=LineLoginResponse)
 async def line_login(payload: LineLoginRequest):
     """
-    Exchanges a LINE authorization code for a Firebase Custom Token.
+    Handles the LINE login/register flow.
 
     1.  Receives an authorization code from the client.
     2.  Exchanges the code for a LINE access token and ID token.
     3.  Verifies the ID token and extracts the LINE User ID.
-    4.  Finds or creates a user in Firebase Authentication based on the LINE User ID.
-    5.  Generates a Firebase Custom Token for that user.
-    6.  Returns the Firebase Custom Token to the client.
+    4.  Searches the `customers` collection in Firestore for a matching `lineId`.
+    5.  If a user is found, it returns a Firebase Custom Token for login.
+    6.  If no user is found, it returns a 'registration_required' status with the user's LINE profile data, signaling the client to proceed to a registration screen.
     """
     if not LINE_CHANNEL_ID or not LINE_CHANNEL_SECRET:
         logging.error("LINE Channel ID or Secret is not configured on the server.")
@@ -94,63 +94,46 @@ async def line_login(payload: LineLoginRequest):
         logging.error(f"Failed to decode or process LINE ID token: {e}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid ID token from LINE.")
 
-    # 4. Find or create Firebase user
+    # 4. Search the `customers` collection for a matching `lineId`.
+    db = firestore.client()
+    customers_ref = db.collection("customers")
+    # Note: This query requires a Firestore index on the 'lineId' field.
+    query = customers_ref.where("lineId", "==", line_user_id).limit(1)
+    
     try:
-        firebase_user = auth.get_user(line_user_id)
-        logging.info(f"Found existing Firebase user for LINE ID: {line_user_id}")
-    except auth.UserNotFoundError:
-        logging.info(f"Creating new Firebase user for LINE ID: {line_user_id}")
+        docs = list(query.stream())
+        if docs:
+            # 5. If user exists (Login Flow)
+            customer_doc = docs[0]
+            firebase_uid = customer_doc.id # The document ID is the Firebase UID
 
-        # The Customer schema requires a non-null displayName. Use a fallback if LINE doesn't provide one.
-        customer_display_name = display_name or f"User...{line_user_id[-6:]}"
-
-        firebase_user = auth.create_user(
-            uid=line_user_id,
-            display_name=customer_display_name,
-            photo_url=picture_url
-        )
-        # --- Create corresponding customer profile in Firestore ---
-        try:
-            db = firestore.client()
-
-            # Use the Pydantic model to structure the LINE profile data.
-            # This ensures consistency with the schema definition.
-            line_profile = schemas.LineUserProfile(
-                user_id=line_user_id,
+            logging.info(f"Found existing customer profile for LINE ID {line_user_id} with Firebase UID {firebase_uid}. Proceeding with login.")
+            
+            # 6. Generate a Firebase Custom Token for that user.
+            try:
+                custom_token = auth.create_custom_token(firebase_uid)
+                return LineLoginResponse(status="login_success", firebase_token=custom_token)
+            except Exception as e:
+                logging.error(f"Firebase custom token creation failed for UID {firebase_uid}: {e}")
+                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate authentication token.")
+        else:
+            # 7. If user does not exist (Registration Flow)
+            logging.info(f"No customer profile found for LINE ID {line_user_id}. Signaling for registration.")
+            
+            line_profile_data = LineProfileResponse(
+                line_user_id=line_user_id,
                 display_name=display_name,
                 picture_url=picture_url,
                 email=email
             )
-            # model_dump(by_alias=True) will use 'userId', 'displayName', etc.
-            # exclude_none=True will remove fields that are None.
-            line_profile_dict = line_profile.model_dump(by_alias=True, exclude_none=True)
-
-            # This mirrors the basic profile created via the main endpoint
-            customer_data = {
-                "lineId": line_user_id,
-                "displayName": customer_display_name,
-                "status": "Active",
-                "createDate": datetime.now(timezone.utc),
-                "lineProfile": line_profile_dict
-            }
-            db.collection("customers").document(line_user_id).set(customer_data)
-            logging.info(f"Created initial customer profile in Firestore for UID: {line_user_id}")
-        except Exception as e:
-            # This is a non-critical error for the auth flow. The user can still log in,
-            # but their profile won't be pre-created. They can create it later.
-            logging.error(f"Failed to create initial Firestore profile for UID {line_user_id}: {e}")
+            
+            return LineLoginResponse(status="registration_required", line_profile=line_profile_data)
     except Exception as e:
-        logging.error(f"Firebase user lookup/creation failed: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to process user account.")
-
-    # 5. Generate Firebase Custom Token
-    try:
-        custom_token = auth.create_custom_token(firebase_user.uid)
-    except Exception as e:
-        logging.error(f"Firebase custom token creation failed: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate authentication token.")
-
-    return FirebaseCustomTokenResponse(firebase_token=custom_token)
+        logging.error(f"Firestore query or processing failed for LINE login: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="A database error occurred during the login process."
+        )
 
 
 @router.post("/line/profile", response_model=LineProfileResponse)

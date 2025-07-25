@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, status, HTTPException, Query
 from typing import List, Dict
 from datetime import datetime, date, timezone
 import logging
@@ -9,25 +9,28 @@ from app.dependencies.auth import get_current_user
 
 router = APIRouter()
 
-@router.post("/me", response_model=schemas.Customer, status_code=status.HTTP_200_OK)
-def create_or_update_customer_profile(
+@router.post("/me", response_model=schemas.Customer, status_code=status.HTTP_201_CREATED)
+def create_customer_profile(
     *,
     customer_in: schemas.CustomerProfilePayload,
-    current_user: Dict = Depends(get_current_user),
-    response: Response
+    current_user: Dict = Depends(get_current_user)
 ):
     """
-    Create or update a customer profile for the authenticated user.
-    This endpoint is idempotent. It creates the profile if it doesn't exist,
-    or updates it with the provided fields if it does.
+    Create a customer profile for the authenticated user.
+    This endpoint is called once after user registration to create their profile.
+    It will return a 409 Conflict error if a profile already exists.
     """
     db = firestore.client()
     user_uid = current_user["uid"]
-    logging.info(f"Attempting to create or update profile for user UID: {user_uid}")
+    logging.info(f"Attempting to create profile for user UID: {user_uid}")
 
     customer_ref = db.collection("customers").document(user_uid)
     doc = customer_ref.get()
-    doc_exists = doc.exists
+    if doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Customer profile already exists for this user."
+        )
 
     # Use exclude_unset=True for partial updates.
     customer_data = customer_in.model_dump(exclude_unset=True)
@@ -36,17 +39,14 @@ def create_or_update_customer_profile(
     if 'displayName' not in customer_data and 'firstName' in customer_data and 'lastName' in customer_data:
         customer_data['displayName'] = f"{customer_data['firstName']} {customer_data['lastName']}"
 
-    # --- Validation for new profile creation ---
-    if not doc_exists:
-        # For a new profile, we need a display name and a date of birth.
-        if 'displayName' not in customer_data:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="A 'display_name' or both 'first_name' and 'last_name' are required to create a profile."
-            )
+    # For a new profile, we need a display name.
+    if 'displayName' not in customer_data:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="A 'displayName' or both 'firstName' and 'lastName' are required to create a profile."
+        )
 
-        customer_data["createDate"] = datetime.now(timezone.utc)
-        response.status_code = status.HTTP_201_CREATED
+    customer_data["createDate"] = datetime.now(timezone.utc)
 
     # Convert date object to datetime object for Firestore compatibility
     if isinstance(customer_data.get("dob"), date):
@@ -55,14 +55,14 @@ def create_or_update_customer_profile(
     logging.info(f"Data to be written for UID {user_uid}: {customer_data}")
 
     try:
-        # Use merge=True to perform an update/upsert
-        write_result = customer_ref.set(customer_data, merge=True)
+        # Use set() for creation.
+        write_result = customer_ref.set(customer_data)
         logging.info(f"Successfully wrote data for UID {user_uid} at {write_result.update_time}")
     except Exception as e:
         logging.error(f"Failed to write to Firestore for UID {user_uid}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Could not create or update customer profile in database."
+            detail="Could not create customer profile in database."
         )
 
     new_customer_doc = customer_ref.get()
