@@ -54,6 +54,7 @@ class CustomerBase(BaseModel):
     firstName: Optional[str] = None
     lastName: Optional[str] = None
     dob: Optional[date] = None
+    phoneNumber: Optional[str] = None
     location: Optional[str] = None
     status: str = "Active"
     airViewNumber: Optional[str] = None
@@ -75,6 +76,7 @@ class CustomerProfilePayload(BaseModel):
     firstName: Optional[str] = None
     lastName: Optional[str] = None
     dob: Optional[date] = None
+    phoneNumber: Optional[str] = None
     location: Optional[str] = None
     status: Optional[str] = None
     airViewNumber: Optional[str] = None

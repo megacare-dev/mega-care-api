@@ -57,6 +57,7 @@ def test_create_customer_profile_success(mock_firestore_client):
         "firstName": "Paripol",
         "lastName": "Tester",
         "dob": datetime(1992, 5, 20, 0, 0),
+        "phoneNumber": "0812345678",
         "status": "Active",
         "createDate": datetime.now(timezone.utc), # The exact value is set in the endpoint
         "lineProfile": None
@@ -71,6 +72,7 @@ def test_create_customer_profile_success(mock_firestore_client):
         "first_name": "Paripol",
         "last_name": "Tester",
         "dob": "1992-05-20",
+        "phone_number": "0812345678",
         "status": "Active"
     }
 
@@ -90,6 +92,7 @@ def test_create_customer_profile_success(mock_firestore_client):
     data_sent_to_firestore = call_args[0]
     
     assert isinstance(data_sent_to_firestore["dob"], datetime)
+    assert data_sent_to_firestore["phoneNumber"] == "0812345678"
     assert "merge" not in call_kwargs
     assert data_sent_to_firestore["dob"] == datetime(1992, 5, 20, 0, 0) # type: ignore
     assert "createDate" in data_sent_to_firestore # type: ignore
@@ -101,6 +104,7 @@ def test_create_customer_profile_success(mock_firestore_client):
     assert response_data["first_name"] == "Paripol"
     # Pydantic model `Customer` has `dob: date`, so FastAPI serializes it back to a string
     assert response_data["dob"] == "1992-05-20"
+    assert response_data["phone_number"] == "0812345678"
     assert "create_date" in response_data
 
 
@@ -153,6 +157,7 @@ def test_get_my_profile_success(mock_firestore_client):
     db_data = {
         "displayName": "Paripol Tester", "firstName": "Paripol", "lastName": "Tester",
         "dob": datetime(1992, 5, 20, 0, 0), "status": "Active",
+        "phoneNumber": "0898765432",
         "createDate": datetime(2023, 1, 1, 12, 0, 0),
         "lineProfile": None
     }
@@ -168,6 +173,7 @@ def test_get_my_profile_success(mock_firestore_client):
     assert response_data["patient_id"] == FAKE_USER_UID
     assert response_data["first_name"] == "Paripol"
     assert response_data["dob"] == "1992-05-20"
+    assert response_data["phone_number"] == "0898765432"
     assert response_data["create_date"] == "2023-01-01T12:00:00"
 
 
