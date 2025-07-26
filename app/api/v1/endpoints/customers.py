@@ -301,8 +301,8 @@ def link_device_to_profile(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Device found, but it is not linked to any patient profile."
             )
-        logging.info(f"Device is a root document. Looking up customer via 'user_uid' field: {user_uid}")
-        pre_existing_customer_ref = db.collection("customers").document(user_uid)
+        logging.info(f"Device is a root document. Looking up customer via 'patientId' field: {patient_id}")
+        pre_existing_customer_ref = db.collection("customers").document(patient_id)
     pre_existing_customer_doc = pre_existing_customer_ref.get()
 
 
