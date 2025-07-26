@@ -19,6 +19,7 @@ client = TestClient(app)
 # --- Mocks and Fake Data ---
 FAKE_LINE_USER_ID = "U1234567890abcdef1234567890abcdef"
 FAKE_FIREBASE_UID = "firebase-uid-for-existing-user"
+FAKE_LINE_CHANNEL_ID = "fake_channel_id"
 FAKE_DISPLAY_NAME = "Test User"
 FAKE_PICTURE_URL = "http://example.com/pic.jpg"
 FAKE_EMAIL = "test@example.com"
@@ -29,7 +30,7 @@ FAKE_FIREBASE_TOKEN = "fake.firebase.custom.token"
 DECODED_ID_TOKEN = {
     "iss": "https://access.line.me",
     "sub": FAKE_LINE_USER_ID,
-    "aud": "1234567890",
+    "aud": FAKE_LINE_CHANNEL_ID,
     "exp": 1678886400,
     "iat": 1678882800,
     "name": FAKE_DISPLAY_NAME,
@@ -41,7 +42,9 @@ DECODED_ID_TOKEN = {
 @pytest.fixture
 def mock_line_api_flow():
     with patch('app.api.v1.endpoints.auth.httpx.AsyncClient') as mock_httpx_client, \
-         patch('app.api.v1.endpoints.auth.jwt.decode') as mock_jwt_decode:
+         patch('app.api.v1.endpoints.auth.jwt.decode') as mock_jwt_decode, \
+         patch('app.api.v1.endpoints.auth.LINE_CHANNEL_ID', FAKE_LINE_CHANNEL_ID), \
+         patch('app.api.v1.endpoints.auth.LINE_CHANNEL_SECRET', 'fake_channel_secret'):
         
         # Mock LINE API call
         mock_line_response = MagicMock()
@@ -51,15 +54,14 @@ def mock_line_api_flow():
         mock_async_client_instance.post.return_value = mock_line_response
         mock_httpx_client.return_value.__aenter__.return_value = mock_async_client_instance
 
-        # Mock JWT decoding
+        # Mock JWT decoding. The test doesn't need to verify the signature,
+        # just that the function is called and returns the expected payload.
         mock_jwt_decode.return_value = DECODED_ID_TOKEN
         
         yield mock_httpx_client, mock_jwt_decode
 
 # --- Test Cases ---
 
-@patch('app.api.v1.endpoints.auth.LINE_CHANNEL_SECRET', 'fake_channel_secret')
-@patch('app.api.v1.endpoints.auth.LINE_CHANNEL_ID', 'fake_channel_id')
 @patch('app.api.v1.endpoints.auth.auth.create_custom_token')
 @patch('app.api.v1.endpoints.auth.firestore.client')
 def test_line_login_existing_user_success(mock_firestore_client, mock_create_token, mock_line_api_flow):
@@ -98,11 +100,11 @@ def test_line_login_existing_user_success(mock_firestore_client, mock_create_tok
     # Assert Firestore and Firebase Auth interactions
     mock_db.collection.assert_called_once_with("customers")
     mock_db.collection.return_value.where.assert_called_once_with("lineId", "==", FAKE_LINE_USER_ID)
-    mock_create_token.assert_called_once_with(FAKE_FIREBASE_UID)
+    # Assert that custom claims are now being passed
+    expected_claims = {'provider': 'line', 'line_user_id': FAKE_LINE_USER_ID}
+    mock_create_token.assert_called_once_with(FAKE_FIREBASE_UID, expected_claims)
 
 
-@patch('app.api.v1.endpoints.auth.LINE_CHANNEL_SECRET', 'fake_channel_secret')
-@patch('app.api.v1.endpoints.auth.LINE_CHANNEL_ID', 'fake_channel_id')
 @patch('app.api.v1.endpoints.auth.auth.create_custom_token')
 @patch('app.api.v1.endpoints.auth.firestore.client')
 def test_line_login_new_user_registration_required(mock_firestore_client, mock_create_token, mock_line_api_flow):

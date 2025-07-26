@@ -74,14 +74,20 @@ async def line_login(payload: LineLoginRequest):
 
     # 3. Decode ID token and get LINE User ID (sub)
     try:
-        # Since we just received the token from a direct server-to-server call,
-        # we can decode it without signature verification for simplicity.
-        # A full implementation might verify the signature using the channel secret.
         id_token = line_data.get("id_token")
         if not id_token:
             raise ValueError("id_token not found in LINE response")
         
-        decoded_id_token = jwt.decode(id_token, options={"verify_signature": False})
+        # Security Best Practice: Verify the ID token's signature and claims.
+        # This ensures the token is authentic, was issued by LINE for your channel,
+        # and has not expired.
+        decoded_id_token = jwt.decode(
+            id_token,
+            LINE_CHANNEL_SECRET,
+            algorithms=["HS256"],
+            audience=LINE_CHANNEL_ID,
+            issuer="https://access.line.me"
+        )
         line_user_id = decoded_id_token.get("sub")
         if not line_user_id:
             raise ValueError("LINE User ID (sub) not found in ID token.")
@@ -111,7 +117,9 @@ async def line_login(payload: LineLoginRequest):
             
             # 6. Generate a Firebase Custom Token for that user.
             try:
-                custom_token = auth.create_custom_token(firebase_uid)
+                # Add custom claims to identify the login provider in the Firebase token
+                developer_claims = {'provider': 'line', 'line_user_id': line_user_id}
+                custom_token = auth.create_custom_token(firebase_uid, developer_claims)
                 return LineLoginResponse(status="login_success", firebase_token=custom_token)
             except Exception as e:
                 logging.error(f"Firebase custom token creation failed for UID {firebase_uid}: {e}")
@@ -177,7 +185,14 @@ async def get_line_profile(payload: LineLoginRequest):
         if not id_token:
             raise ValueError("id_token not found in LINE response")
 
-        decoded_id_token = jwt.decode(id_token, options={"verify_signature": False})
+        # Security Best Practice: Verify the ID token's signature and claims.
+        decoded_id_token = jwt.decode(
+            id_token,
+            LINE_CHANNEL_SECRET,
+            algorithms=["HS256"],
+            audience=LINE_CHANNEL_ID,
+            issuer="https://access.line.me"
+        )
 
         line_user_id = decoded_id_token.get("sub")
         if not line_user_id:
