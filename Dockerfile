@@ -22,8 +22,10 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code
-COPY . .
+
+# Copy only the application and test code needed to run tests
+COPY ./app ./app
+COPY ./tests ./tests
 
 # Run unit tests. The build will fail if tests do not pass.
 RUN pytest

@@ -33,16 +33,17 @@ steps:
       - "add" # This will now ensure the 'main' tag also gets the 'latest' tag
       - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:main"
       - "${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}:latest"
-
-  # Grant the Cloud Build service account the Artifact Registry Tag Editor role.
+ 
+  # Grant the Cloud Build service account the Artifact Registry Writer role on the repository.
   - name: "gcr.io/cloud-builders/gcloud"
     args:
-      - "projects"
+      - "artifacts"
+      - "repositories"
       - "add-iam-policy-binding"
-      - "${PROJECT_ID}"
+      - "${_REPO_NAME}"
+      - "--location=${_LOCATION}"
       - "--member=serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"
-      - "--role=roles/artifactregistry.tagEditor"
-      - "--condition=None"
+      - "--role=roles/artifactregistry.writer"
 
   # 4. Deploy container image to Cloud Run with security best practices
   - name: "gcr.io/cloud-builders/gcloud"
