@@ -98,11 +98,13 @@ This phase outlines the "Login or Register" flow using LINE and Email, user prof
 - [x] **Implement Device Linking as a Separate Action: `POST /api/v1/customers/me/link-device`**
   - [x] This endpoint is protected and used by an authenticated user at any time post-login.
   - [x] Receive the device Serial Number (SN) from the client.
-  - [x] Find the device in the root `devices` collection using the provided SN.
-  - [x] If a matching device is found and field status should be unlink:
-    - [x] Look up the associated patient profile from the `patients` collection using the `patientId` from the device document.
-    - [x] Merge the data from the found `patients` profile into the current user's `customers` document.
-    - [x] Update the device document to link it to the current user's `customers` document (e.g., by adding it to a sub-collection).
+  - [x] Find the device with a status of "unlink" using a `collection_group` query across all `devices` collections.
+  - [x] If a matching device is found:
+    - [x] Identify the associated pre-existing patient profile. This profile could be the parent document in the `customers` collection OR a document in the `patients` collection referenced by a `patientId` field in the device document.
+    - [x] Merge the data from the found profile into the current user's `customers` document, preserving the user's LINE profile information.
+    - [x] If the device document contained a `patientId`, ensure the profile is also stored/updated in the `patients` collection, linking it to the current user's ID.
+    - [x] Update the original device document to link it to the current user (set status to "active", add `customerId`).
+    - [x] Add a record of the linked device to the current user's `devices` sub-collection for consistency.
   - [x] Return the updated user profile on success or an error on failure.
 
 - [ ] **Future Improvements**
