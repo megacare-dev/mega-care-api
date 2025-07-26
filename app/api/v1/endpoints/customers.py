@@ -276,6 +276,15 @@ def link_device_to_profile(
     # 2. Get the parent customer profile from the found device.
     found_device_doc = device_docs[0]
     device_data = found_device_doc.to_dict()
+
+    # Check if the device has already been linked to another customer.
+    if device_data.get("customerId") and device_data.get("customerId") != user_uid:
+        logging.warning(f"Device SN {link_request.serialNumber} is already linked to another customer: {device_data.get('customerId')}")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This device is already linked to another account."
+        )
+
     logging.info(f"Found device doc with ID: {found_device_doc.id} for SN: {link_request.serialNumber}. Data: {device_data}")
     # The device doc's parent is the 'devices' collection, whose parent is the customer document.
     pre_existing_customer_ref = found_device_doc.reference.parent.parent
@@ -348,6 +357,15 @@ def link_device_to_profile(
     except Exception as e:
         logging.error(f"Failed to merge Firestore data for UID {user_uid}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not link device to customer profile.")
+
+    # Mark the original device document as linked to this customer to prevent re-linking.
+    try:
+        found_device_doc.reference.update({"customerId": user_uid})
+        logging.info(f"Successfully updated original device doc {found_device_doc.id} with customerId {user_uid}.")
+    except Exception as e:
+        # This is a non-critical error for the user flow, but should be logged as a warning.
+        logging.warning(f"Could not update original device doc {found_device_doc.id} with customerId: {e}")
+
 
     # 6. Create a record of the linked device in the user's 'devices' sub-collection.
     # This ensures the device used for linking is now associated with the user's profile.
