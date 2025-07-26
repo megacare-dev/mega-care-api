@@ -553,12 +553,12 @@ def test_link_device_preserves_line_profile(mock_firestore_client):
     mock_devices_collection_ref.parent = mock_pre_existing_customer_ref
 
     # Device data. The 'patientId' field is None/missing in this scenario.
-    mock_device_data = {"serialNumber": "SN123456789", "deviceNumber": "987"}
+    mock_device_data = {"serialNumber": "SN123456789", "deviceNumber": "987", "status": "unlink"}
     mock_device_doc = MagicMock()
     mock_device_doc.id = "device-doc-id"
     mock_device_doc.reference.parent = mock_devices_collection_ref
     mock_device_doc.to_dict.return_value = mock_device_data
-    mock_db.collection_group.return_value.where.return_value.limit.return_value.stream.return_value = [mock_device_doc]
+    mock_db.collection_group.return_value.where.return_value.where.return_value.limit.return_value.stream.return_value = [mock_device_doc]
 
     # --- Mocking the collection calls ---
     mock_customers_collection = MagicMock()
@@ -631,6 +631,9 @@ def test_link_device_preserves_line_profile(mock_firestore_client):
     assert data_sent_to_firestore["patientId"] is None
     assert "merge" not in call_kwargs # We are doing a full .set(), not a merge.
 
+    # Assert that the original device document was updated to be linked
+    mock_device_doc.reference.update.assert_called_once_with({"customerId": FAKE_USER_UID, "status": "active"})
+
     # Assert that the device was added to the user's sub-collection
     mock_current_user_customer_ref.collection.assert_called_once_with("devices")
     mock_user_devices_collection.add.assert_called_once()
@@ -680,13 +683,12 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
     mock_devices_collection_ref.parent = mock_pre_existing_customer_ref
 
     # This is the key part: the device document now has a 'patientId'
-    mock_device_data = {"serialNumber": "SN123456789", "patientId": DEVICE_PATIENT_ID_FIELD, "deviceNumber": "987"}
+    mock_device_data = {"serialNumber": "SN123456789", "patientId": DEVICE_PATIENT_ID_FIELD, "deviceNumber": "987", "status": "unlink"}
     mock_device_doc = MagicMock()
     mock_device_doc.reference.parent = mock_devices_collection_ref
     mock_device_doc.to_dict.return_value = mock_device_data
     mock_device_doc.id = "device-doc-id"
-
-    mock_db.collection_group.return_value.where.return_value.limit.return_value.stream.return_value = [mock_device_doc]
+    mock_db.collection_group.return_value.where.return_value.where.return_value.limit.return_value.stream.return_value = [mock_device_doc]
 
     # --- Mocking the Firestore collection calls ---
     mock_customers_collection = MagicMock()
@@ -755,6 +757,9 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
     assert "lineProfile" in data_sent_to_firestore
     assert data_sent_to_firestore["patientId"] == DEVICE_PATIENT_ID_FIELD
     assert "merge" not in call_kwargs # Check that a full write was performed
+
+    # Assert that the original device document was updated to be linked
+    mock_device_doc.reference.update.assert_called_once_with({"customerId": FAKE_USER_UID, "status": "active"})
 
     # Assert that the device was also added to the user's 'devices' sub-collection
     mock_current_user_customer_ref.collection.assert_called_once_with("devices")

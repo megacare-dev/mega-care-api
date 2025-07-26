@@ -257,7 +257,9 @@ def link_device_to_profile(
 
     # 1. Find the device using a collection group query.
     # This searches all 'devices' sub-collections for a matching serial number.
-    device_query = db.collection_group("devices").where("serialNumber", "==", link_request.serialNumber).limit(1)
+    # The device must also have a status of "unlink" to be available for linking.
+    # This requires a composite index in Firestore on (serialNumber, status).
+    device_query = db.collection_group("devices").where("serialNumber", "==", link_request.serialNumber).where("status", "==", "unlink").limit(1)
     try:
         device_docs = list(device_query.stream())
     except Exception as e:
@@ -276,14 +278,6 @@ def link_device_to_profile(
     # 2. Get the parent customer profile from the found device.
     found_device_doc = device_docs[0]
     device_data = found_device_doc.to_dict()
-
-    # Check if the device has already been linked to another customer.
-    if device_data.get("customerId") and device_data.get("customerId") != user_uid:
-        logging.warning(f"Device SN {link_request.serialNumber} is already linked to another customer: {device_data.get('customerId')}")
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This device is already linked to another account."
-        )
 
     logging.info(f"Found device doc with ID: {found_device_doc.id} for SN: {link_request.serialNumber}. Data: {device_data}")
     # The device doc's parent is the 'devices' collection, whose parent is the customer document.
@@ -360,7 +354,7 @@ def link_device_to_profile(
 
     # Mark the original device document as linked to this customer to prevent re-linking.
     try:
-        found_device_doc.reference.update({"customerId": user_uid})
+        found_device_doc.reference.update({"customerId": user_uid, "status": "active"})
         logging.info(f"Successfully updated original device doc {found_device_doc.id} with customerId {user_uid}.")
     except Exception as e:
         # This is a non-critical error for the user flow, but should be logged as a warning.

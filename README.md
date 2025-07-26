@@ -92,4 +92,7 @@ Deployment is handled via Google Cloud Build using the `cloudbuild.yaml` configu
     From the project root, run:
     ```bash
     gcloud builds submit --config cloudbuild.yaml .
+
+Test Local
+uvicorn app.main:app --reload   
     ```
