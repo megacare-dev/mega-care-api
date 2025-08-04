@@ -258,12 +258,12 @@ def link_device_to_profile(
 
     # 1. Find the device using a collection group query.
     # This searches all 'devices' sub-collections for a matching serial number.
-    # The device must also have a status of "unlink" to be available for linking.
+    # The device must also have a status of "unlinked" to be available for linking.
     # This requires a composite index in Firestore on (serialNumber, status).
     device_query = db.collection_group("devices").where(
         filter=And([
             FieldFilter("serialNumber", "==", link_request.serial_number),
-            FieldFilter("status", "==", "unlinked")
+            FieldFilter("status", "==", "unlink")
         ])
     ).limit(1)
     try:
