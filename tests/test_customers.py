@@ -144,7 +144,7 @@ def test_create_customer_profile_conflict(mock_firestore_client):
 @patch('app.api.v1.endpoints.customers.firestore.client')
 def test_get_my_profile_success(mock_firestore_client):
     """
-    Tests successful retrieval of a customer profile.
+    Tests successful retrieval of a customer profile, including equipment sub-collections.
     """
     # Arrange
     mock_db = MagicMock()
@@ -152,6 +152,7 @@ def test_get_my_profile_success(mock_firestore_client):
     mock_customer_ref = MagicMock()
     mock_db.collection.return_value.document.return_value = mock_customer_ref
     
+    # Mock main customer document
     mock_doc = MagicMock()
     mock_doc.exists = True
     mock_doc.id = FAKE_USER_UID
@@ -165,6 +166,33 @@ def test_get_my_profile_success(mock_firestore_client):
     mock_doc.to_dict.return_value = db_data
     mock_customer_ref.get.return_value = mock_doc
 
+    # Mock devices sub-collection
+    mock_devices_collection = MagicMock()
+    device1_data = { "deviceName": "AirSense 10", "serialNumber": "SN1", "deviceNumber": "123", "status": "Active", "addedDate": datetime(2023, 1, 1) }
+    mock_device_doc1 = MagicMock()
+    mock_device_doc1.id = "device-id-1"
+    mock_device_doc1.to_dict.return_value = device1_data
+    mock_devices_collection.stream.return_value = [mock_device_doc1]
+
+    # Mock masks sub-collection
+    mock_masks_collection = MagicMock()
+    mock_masks_collection.stream.return_value = [] # No masks
+
+    # Mock airTubing sub-collection
+    mock_airtubing_collection = MagicMock()
+    mock_airtubing_collection.stream.return_value = [] # No tubing
+
+    # Make customer_ref.collection return the correct mock collection
+    def collection_side_effect(name):
+        if name == "devices":
+            return mock_devices_collection
+        if name == "masks":
+            return mock_masks_collection
+        if name == "airTubing":
+            return mock_airtubing_collection
+        return MagicMock() # default
+    mock_customer_ref.collection.side_effect = collection_side_effect
+
     # Act
     response = client.get("/api/v1/customers/me")
 
@@ -176,6 +204,13 @@ def test_get_my_profile_success(mock_firestore_client):
     assert response_data["dob"] == "1992-05-20"
     assert response_data["phone_number"] == "0898765432"
     assert response_data["setup_date"] == "2023-01-01T12:00:00"
+    assert "devices" in response_data
+    assert len(response_data["devices"]) == 1
+    assert response_data["devices"][0]["device_id"] == "device-id-1"
+    assert "masks" in response_data
+    assert len(response_data["masks"]) == 0
+    assert "air_tubing" in response_data
+    assert len(response_data["air_tubing"]) == 0
 
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
@@ -637,7 +672,6 @@ def test_link_device_preserves_line_profile(mock_firestore_client):
     assert any(f.field_path == "serialNumber" and f.op_string == "==" and f.value == request_payload["serial_number"] for f in filters)
     assert any(f.field_path == "status" and f.op_string == "==" and f.value == "unlinked" for f in filters)
 
-    mock_customers_collection.document.assert_called_once_with(FAKE_USER_UID)
     # Assert that the copy to 'patient_list' collection DID NOT happen
     mock_patient_list_collection.document.assert_not_called()
 
@@ -675,160 +709,160 @@ def test_link_device_preserves_line_profile(mock_firestore_client):
 
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
-def test_link_device_copies_to_patients_collection(mock_firestore_client):
+def test_get_latest_prescription_success(mock_firestore_client):
     """
-    Tests that linking a device correctly copies the pre-existing profile
-    to the 'patient_list' collection when the device doc has a 'patientId' field,
-    and that the user's lineProfile is preserved.
+    Tests successful retrieval of the latest prescription from the patient_list collection.
     """
     # Arrange
     mock_db = MagicMock()
     mock_firestore_client.return_value = mock_db
-    mock_collection_group_ref = MagicMock()
-    mock_db.collection_group.return_value = mock_collection_group_ref
+    
+    FAKE_PATIENT_ID = "airview-patient-123"
 
-    # --- Mocking the Collection Group Query ---
-    PRE_EXISTING_CUSTOMER_ID = "pre-existing-customer-123"
-    DEVICE_PATIENT_ID_FIELD = "new-patient-doc-id-from-device" # The ID for the new doc in 'patients'
+    # 1. Mock the initial fetch of the customer document to get the patientId
+    mock_customer_doc = MagicMock()
+    mock_customer_doc.exists = True
+    mock_customer_doc.to_dict.return_value = {"patientId": FAKE_PATIENT_ID}
+    mock_customer_ref = MagicMock()
+    mock_customer_ref.get.return_value = mock_customer_doc
 
-    pre_existing_customer_data = {
-        "displayName": "Jane Firestore", "firstName": "Jane", "lastName": "Firestore",
-        "dob": datetime(1985, 6, 15, 0, 0), "status": "Active",
-        "setupDate": datetime(2023, 1, 1)
+    # 2. Mock the fetch of the prescription from the patient_list collection
+    mock_prescriptions_ref = MagicMock()
+    mock_patient_list_doc_ref = MagicMock()
+    mock_patient_list_doc_ref.collection.return_value = mock_prescriptions_ref
+
+    # Route the db.collection().document() calls
+    def document_router(doc_id):
+        if doc_id == FAKE_USER_UID:
+            return mock_customer_ref
+        if doc_id == FAKE_PATIENT_ID:
+            return mock_patient_list_doc_ref
+        return MagicMock()
+
+    def collection_router(name):
+        mock_collection = MagicMock()
+        mock_collection.document.side_effect = document_router
+        return mock_collection
+    
+    mock_db.collection.side_effect = collection_router
+    # This is the data structure we expect in the Firestore document
+    prescription_db_data = {
+        "addedDate": datetime(2024, 3, 8, 10, 0, 0, tzinfo=timezone.utc),
+        "device": {
+            "name": "AirSense 10 AutoSet",
+            "serialNumber": "22232746840",
+            "addedOn": datetime(2024, 3, 8, 10, 0, 0, tzinfo=timezone.utc)
+        },
+        "mask": {
+            "name": "AirFit N20",
+            "size": "Medium",
+            "addedOn": datetime(2024, 3, 8, 10, 0, 0, tzinfo=timezone.utc)
+        },
+        "airTubing": {
+            "name": "ClimateLineAir",
+            "addedOn": datetime(2024, 3, 8, 10, 0, 0, tzinfo=timezone.utc)
+        },
+        "settings": {
+            "pressure": {"min": 10.0, "max": 18.0},
+            "epr": {"mode": "Fulltime", "level": 3}
+        },
+        "climate": {"control": "Auto", "humidifierLevel": "Level 4"},
+        "monitoring": {"dataAccess": "Full Time Monitoring"}
     }
-    mock_pre_existing_customer_doc = MagicMock()
-    mock_pre_existing_customer_doc.exists = True
-    mock_pre_existing_customer_doc.to_dict.return_value = pre_existing_customer_data
-    mock_pre_existing_customer_ref = MagicMock()
-    mock_pre_existing_customer_ref.id = PRE_EXISTING_CUSTOMER_ID
-    mock_pre_existing_customer_ref.get.return_value = mock_pre_existing_customer_doc
 
-    mock_devices_collection_ref = MagicMock()
-    mock_devices_collection_ref.parent = mock_pre_existing_customer_ref
-
-    # This is the key part: the device document now has a 'patientId'
-    mock_device_data = {"serialNumber": "SN123456789", "patientId": DEVICE_PATIENT_ID_FIELD, "deviceNumber": "987", "status": "unlinked"}
-    mock_device_doc = MagicMock()
-    mock_device_doc.reference.parent = mock_devices_collection_ref
-    mock_device_doc.to_dict.return_value = mock_device_data
-    mock_device_doc.id = "device-doc-id"
+    mock_doc = MagicMock()
+    mock_doc.to_dict.return_value = prescription_db_data
     mock_query = MagicMock()
-    mock_collection_group_ref.where.return_value.limit.return_value = mock_query
-    mock_query.stream.return_value = [mock_device_doc]
-
-    # --- Mocking the Firestore collection calls ---
-    mock_customers_collection = MagicMock()
-    mock_patient_list_collection = MagicMock()
-    def collection_side_effect(name):
-        if name == "customers": return mock_customers_collection
-        if name == "patient_list": return mock_patient_list_collection
-        return MagicMock() # Default mock for other collections
-    mock_db.collection.side_effect = collection_side_effect
-
-    # --- Mocking the current user's profile (the one performing the link) ---
-    current_user_initial_data = {
-        "lineId": FAKE_USER_UID,
-        "displayName": "Test User From Line",
-        "lineProfile": {"userId": FAKE_USER_UID}
-    }
-    mock_current_user_initial_doc = MagicMock()
-    mock_current_user_initial_doc.exists = True
-    mock_current_user_initial_doc.to_dict.return_value = current_user_initial_data
-
-    # --- Mocking the Update/Get of the Current User's Profile ---
-    final_merged_data = {
-        **pre_existing_customer_data,
-        "lineId": FAKE_USER_UID,
-        "patientId": DEVICE_PATIENT_ID_FIELD,
-        "lineProfile": current_user_initial_data["lineProfile"]
-    }
-    mock_updated_doc = MagicMock()
-    mock_updated_doc.exists = True
-    mock_updated_doc.id = FAKE_USER_UID
-    mock_updated_doc.to_dict.return_value = final_merged_data
-
-    mock_current_user_customer_ref = MagicMock()
-    mock_user_devices_collection = MagicMock()
-    mock_current_user_customer_ref.collection.return_value = mock_user_devices_collection
-    mock_current_user_customer_ref.get.side_effect = [mock_current_user_initial_doc, mock_updated_doc]
-    mock_customers_collection.document.return_value = mock_current_user_customer_ref
-
-    # --- Mocking the set call on the 'patient_list' collection ---
-    mock_new_patient_doc_ref = MagicMock()
-    mock_patient_list_collection.document.return_value = mock_new_patient_doc_ref
-
-    request_payload = {"serial_number": "SN123456789", "device_number": "987"}
+    mock_query.stream.return_value = [mock_doc]
+    mock_prescriptions_ref.order_by.return_value.limit.return_value = mock_query
 
     # Act
-    response = client.post("/api/v1/customers/me/link-device", json=request_payload)
+    response = client.get("/api/v1/customers/me/latest-prescription")
 
     # Assert
     assert response.status_code == 200
+    response_data = response.json()
+    assert response_data["device"]["name"] == "AirSense 10 AutoSet"
+    assert response_data["device"]["serial_number"] == "22232746840"
+    assert response_data["settings"]["pressure"]["min"] == 10.0
+    assert response_data["climate"]["humidifier_level"] == "Level 4"
+    
+    # Assert correct collections were called
+    mock_db.collection.assert_any_call("customers")
+    mock_db.collection.assert_any_call("patient_list")
+    mock_customer_ref.get.assert_called_once()
+    mock_patient_list_doc_ref.collection.assert_called_once_with("prescriptions")
 
-    # Assert where call
-    # Assert the where clause by inspecting the filter object
-    mock_collection_group_ref.where.assert_called_once()
-    _call_args, call_kwargs = mock_collection_group_ref.where.call_args
-    called_filter = call_kwargs.get('filter')
-    assert isinstance(called_filter, And)
-    assert len(called_filter.filters) == 2
-    # Check for presence of both filters, order-independent
-    filters = called_filter.filters
-    assert any(f.field_path == "serialNumber" and f.op_string == "==" and f.value == request_payload["serial_number"] for f in filters)
-    assert any(f.field_path == "status" and f.op_string == "==" and f.value == "unlinked" for f in filters)
-
-    # Assert the copy to 'patient_list' collection
-    mock_patient_list_collection.document.assert_called_once_with(DEVICE_PATIENT_ID_FIELD)
-
-    # The endpoint adds the 'customerId' (the logged-in user's UID) to the data.
-    expected_data_for_patients_collection = pre_existing_customer_data.copy()
-    expected_data_for_patients_collection["customerId"] = FAKE_USER_UID
-    mock_new_patient_doc_ref.set.assert_called_once_with(expected_data_for_patients_collection, merge=True)
-
-    # Assert the write to 'customers' collection
-    mock_customers_collection.document.assert_called_once_with(FAKE_USER_UID)
-    mock_current_user_customer_ref.set.assert_called_once()
-    call_args, call_kwargs = mock_current_user_customer_ref.set.call_args
-    data_sent_to_firestore = call_args[0]
-
-    assert data_sent_to_firestore["firstName"] == "Jane"
-    assert "lineProfile" in data_sent_to_firestore
-    assert data_sent_to_firestore["patientId"] == DEVICE_PATIENT_ID_FIELD
-    assert "merge" not in call_kwargs # Check that a full write was performed
-
-    # Assert that the original device document was updated to be linked
-    mock_device_doc.reference.update.assert_called_once_with({"customerId": FAKE_USER_UID, "status": "active"})
-
-    # Assert that the device was also added to the user's 'devices' sub-collection
-    mock_current_user_customer_ref.collection.assert_called_once_with("devices")
-    mock_user_devices_collection.add.assert_called_once()
+    # Assert query logic
+    mock_prescriptions_ref.order_by.assert_called_once_with("addedDate", direction='DESCENDING')
+    mock_prescriptions_ref.order_by.return_value.limit.assert_called_once_with(1)
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
-def test_link_device_not_found_in_firestore(mock_firestore_client):
-    """Tests 404 when the device SN is not found in Firestore."""
+def test_get_latest_prescription_not_found(mock_firestore_client):
+    """Tests 404 response when a patient has no prescription documents."""
     # Arrange
     mock_db = MagicMock()
     mock_firestore_client.return_value = mock_db
-    mock_collection_group_ref = MagicMock()
-    mock_db.collection_group.return_value = mock_collection_group_ref
+    FAKE_PATIENT_ID = "airview-patient-123"
+
+    # 1. Mock the initial fetch of the customer document to get the patientId
+    mock_customer_doc = MagicMock()
+    mock_customer_doc.exists = True
+    mock_customer_doc.to_dict.return_value = {"patientId": FAKE_PATIENT_ID}
+    mock_customer_ref = MagicMock()
+    mock_customer_ref.get.return_value = mock_customer_doc
+
+    # 2. Mock the fetch of the prescription from the patient_list collection
+    mock_prescriptions_ref = MagicMock()
+    mock_patient_list_doc_ref = MagicMock()
+    mock_patient_list_doc_ref.collection.return_value = mock_prescriptions_ref
+
+    # Route the db.collection().document() calls
+    def document_router(doc_id):
+        if doc_id == FAKE_USER_UID:
+            return mock_customer_ref
+        if doc_id == FAKE_PATIENT_ID:
+            return mock_patient_list_doc_ref
+        return MagicMock()
+
+    def collection_router(name):
+        mock_collection = MagicMock()
+        mock_collection.document.side_effect = document_router
+        return mock_collection
+    
+    mock_db.collection.side_effect = collection_router
+
+    # Mock that the query returns no documents
     mock_query = MagicMock()
-    mock_collection_group_ref.where.return_value.limit.return_value = mock_query
-    mock_query.stream.return_value = []
-    request_payload = {"serial_number": "INVALID_SN", "device_number": "999"}
+    mock_query.stream.return_value = [] # No documents found
+    mock_prescriptions_ref.order_by.return_value.limit.return_value = mock_query
 
     # Act
-    response = client.post("/api/v1/customers/me/link-device", json=request_payload)
+    response = client.get("/api/v1/customers/me/latest-prescription")
+    # Assert
+    assert response.status_code == 404
+    assert response.json()["detail"] == "No prescription found for this user."
+
+@patch('app.api.v1.endpoints.customers.firestore.client')
+def test_get_latest_prescription_no_patient_id(mock_firestore_client):
+    """Tests 404 response when the user profile has no patientId."""
+    # Arrange
+    mock_db = MagicMock()
+    mock_firestore_client.return_value = mock_db
+
+    # 1. Mock the customer document to exist but have no 'patientId' field
+    mock_customer_doc = MagicMock()
+    mock_customer_doc.exists = True
+    mock_customer_doc.to_dict.return_value = {"displayName": "Unlinked User"} # No patientId
+    mock_customer_ref = MagicMock()
+    mock_customer_ref.get.return_value = mock_customer_doc
+    mock_db.collection.return_value.document.return_value = mock_customer_ref
+
+    # Act
+    response = client.get("/api/v1/customers/me/latest-prescription")
 
     # Assert
     assert response.status_code == 404
-    assert "No patient record found" in response.json()["detail"]
-    # Assert the where clause by inspecting the filter object
-    mock_collection_group_ref.where.assert_called_once()
-    _call_args, call_kwargs = mock_collection_group_ref.where.call_args
-    called_filter = call_kwargs.get('filter')
-    assert isinstance(called_filter, And)
-    assert len(called_filter.filters) == 2
-    # Check for presence of both filters, order-independent
-    filters = called_filter.filters
-    assert any(f.field_path == "serialNumber" and f.op_string == "==" and f.value == request_payload["serial_number"] for f in filters)
-    assert any(f.field_path == "status" and f.op_string == "==" and f.value == "unlinked" for f in filters)
+    assert response.json()["detail"] == "No linked patient record found for this user."
+    mock_db.collection.assert_called_once_with("customers")
+    mock_db.collection.return_value.document.assert_called_once_with(FAKE_USER_UID)

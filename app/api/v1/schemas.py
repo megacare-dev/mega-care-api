@@ -99,6 +99,60 @@ class Customer(CustomerBase):
     data_access: Optional[DataAccessMap] = Field(None, alias="dataAccess")
     is_compliant: Optional[bool] = Field(None, alias="isCompliant")
     last_30_days_compliance: Optional[float] = Field(None, alias="last30DaysCompliance")
+    devices: Optional[List['Device']] = None
+    masks: Optional[List['Mask']] = None
+    air_tubing: Optional[List['AirTubing']] = Field(None, alias="airTubing")
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
+
+# --- Prescription Schemas ---
+class DevicePrescription(BaseModel):
+    name: str
+    serial_number: str = Field(..., alias="serialNumber")
+    added_on: datetime = Field(..., alias="addedOn")
+    model_config = ConfigDict(populate_by_name=True)
+
+class MaskPrescription(BaseModel):
+    name: str
+    size: str
+    added_on: datetime = Field(..., alias="addedOn")
+    model_config = ConfigDict(populate_by_name=True)
+
+class AirTubingPrescription(BaseModel):
+    name: str
+    added_on: datetime = Field(..., alias="addedOn")
+    model_config = ConfigDict(populate_by_name=True)
+
+class PressureSettings(BaseModel):
+    min: float
+    max: float
+    model_config = ConfigDict(populate_by_name=True)
+
+class EprSettings(BaseModel):
+    mode: str
+    level: int
+    model_config = ConfigDict(populate_by_name=True)
+
+class PrescriptionSettings(BaseModel):
+    pressure: PressureSettings
+    epr: EprSettings
+    model_config = ConfigDict(populate_by_name=True)
+
+class ClimateSettings(BaseModel):
+    control: str
+    humidifier_level: str = Field(..., alias="humidifierLevel")
+    model_config = ConfigDict(populate_by_name=True)
+
+class MonitoringSettings(BaseModel):
+    data_access: str = Field(..., alias="dataAccess")
+    model_config = ConfigDict(populate_by_name=True)
+
+class PrescriptionResponse(BaseModel):
+    device: DevicePrescription
+    mask: MaskPrescription
+    air_tubing: AirTubingPrescription = Field(..., alias="airTubing")
+    settings: PrescriptionSettings
+    climate: ClimateSettings
+    monitoring: MonitoringSettings
     model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
 # --- Equipment Schemas ---

@@ -80,7 +80,7 @@ def create_customer_profile(
 @router.get("/me", response_model=schemas.Customer, response_model_by_alias=False)
 def get_my_profile(current_user: Dict = Depends(get_current_user)):
     """
-    Retrieve the profile of the currently authenticated user.
+    Retrieve the profile of the currently authenticated user, including their equipment.
     """
     db = firestore.client()
     user_uid = current_user["uid"]
@@ -103,6 +103,34 @@ def get_my_profile(current_user: Dict = Depends(get_current_user)):
     logging.info(f"Successfully retrieved profile for UID: {user_uid}")
     response_data = doc.to_dict()
     response_data["patientId"] = doc.id
+
+    # Fetch devices sub-collection
+    devices = []
+    devices_ref = customer_ref.collection("devices")
+    for device_doc in devices_ref.stream():
+        device_data = device_doc.to_dict()
+        device_data["deviceId"] = device_doc.id
+        devices.append(device_data)
+    response_data["devices"] = devices
+
+    # Fetch masks sub-collection
+    masks = []
+    masks_ref = customer_ref.collection("masks")
+    for mask_doc in masks_ref.stream():
+        mask_data = mask_doc.to_dict()
+        mask_data["maskId"] = mask_doc.id
+        masks.append(mask_data)
+    response_data["masks"] = masks
+
+    # Fetch air tubing sub-collection
+    tubes = []
+    tubing_ref = customer_ref.collection("airTubing")
+    for tube_doc in tubing_ref.stream():
+        tube_data = tube_doc.to_dict()
+        tube_data["tubingId"] = tube_doc.id
+        tubes.append(tube_data)
+    response_data["airTubing"] = tubes
+
     return schemas.Customer.model_validate(response_data)
 
 
@@ -445,6 +473,65 @@ def submit_daily_report(
     response_data["reportId"] = new_report_doc.id
     return schemas.DailyReport.model_validate(response_data)
 
+
+@router.get("/me/latest-prescription", response_model=schemas.PrescriptionResponse, response_model_by_alias=False)
+def get_latest_prescription(current_user: Dict = Depends(get_current_user)):
+    """
+    Retrieves the latest prescription/device settings for the authenticated user.
+    It uses the `patientId` from the user's profile to look up the prescription
+    in the `patient_list` collection.
+    """
+    db = firestore.client()
+    user_uid = current_user["uid"]
+    logging.info(f"Attempting to retrieve latest prescription for user UID: {user_uid}")
+
+    # 1. Get the user's customer profile to find their patientId (airviewId).
+    customer_ref = db.collection("customers").document(user_uid)
+    try:
+        customer_doc = customer_ref.get()
+        if not customer_doc.exists:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer profile not found.")
+        
+        customer_data = customer_doc.to_dict()
+        patient_id = customer_data.get("patientId")
+
+        if not patient_id:
+            logging.warning(f"User {user_uid} has not linked a device and has no patientId.")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No linked patient record found for this user.")
+
+    except HTTPException:
+        raise # Re-raise HTTP exceptions
+    except Exception as e:
+        logging.error(f"Failed to retrieve customer profile for UID {user_uid}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="A database error occurred while fetching user profile."
+        )
+
+    # 2. Use the patientId to query the `patient_list` collection for the latest prescription.
+    logging.info(f"Found patientId '{patient_id}' for user UID {user_uid}. Querying patient_list.")
+    prescriptions_ref = db.collection("patient_list").document(patient_id).collection("prescriptions")
+    
+    # The logic to find the "latest" remains the same: order by a date field.
+    query = prescriptions_ref.order_by("addedDate", direction=firestore.Query.DESCENDING).limit(1)
+
+    try:
+        docs = list(query.stream())
+    except Exception as e:
+        # This could be a "NOT_FOUND" if the index doesn't exist, which is a developer error.
+        # Or other query failures.
+        logging.error(f"Firestore query for latest prescription failed for patientId {patient_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="A database error occurred while fetching the prescription."
+        )
+
+    if not docs:
+        logging.warning(f"No prescription found for patientId: {patient_id}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No prescription found for this user.")
+
+    prescription_data = docs[0].to_dict()
+    return schemas.PrescriptionResponse.model_validate(prescription_data)
 
 @router.get("/me/dailyReports", response_model=List[schemas.DailyReport], response_model_by_alias=False)
 def get_my_daily_reports(
