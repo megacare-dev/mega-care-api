@@ -254,174 +254,110 @@ Response (200 OK): list[DailyReport]
 
 ## Data Hierarchy
 
-The database follows a hierarchical model with a main root collection and several nested sub-collections.
+The database is designed with the following main collections and sub-collections:
 
-customers/{patientId}├── devices/{deviceId}├── masks/{maskId}├── airTubing/{tubingId}└── dailyReports/{reportDate}
+*   **`patient_list/{patientId}`**
+    *   `details/{detailId}`
+    *   `prescriptions/{prescriptionId}`
+*   **`devices/{deviceId}`**
+
 ---
 
-## 1. Root Collection: `customers`
+## 1. Root Collections
 
-This is the main collection where each document represents a single patient. The document ID is the unique `patientId`.
+### 1.1. `patient_list`
 
--   **Collection:** `customers`
--   **Document ID:** `patient_id` (e.g., `ee319d58-9aeb-4af7-b156-f91540689595`)
+This is the main collection where each document represents a single patient, primarily containing summary data from the AirView patient list for quick filtering and display.
 
-### Fields
+-   **Collection:** `patient_list`
+-   **Document ID:** `airview_patient_id` (A unique ID from the AirView system)
 
-| Field               | Type        | Description                                       |
-| ------------------- | ----------- | ------------------------------------------------- |
-| `lineId`            | `string`    | The customer's LINE ID.                           |
-| `displayName`       | `string`    | The customer's display name.                      |
-| `title`             | `string`    | The customer's title (e.g., Mr, Mrs).             |
-| `firstName`         | `string`    | The customer's first name.                        |
-| `lastName`          | `string`    | The customer's last name.                         |
-| `dob`               | `timestamp` | The customer's date of birth.                     |
-| `location`          | `string`    | The customer's location or company.               |
-| `status`            | `string`    | The customer's status (e.g., "Active").           |
-| `setupDate`         | `timestamp` | The date the customer was set up.                 |
-| `airViewNumber`     | `string`    | The customer's AirView number.                    |
-| `monitoringType`    | `string`    | The type of monitoring (e.g., "Wireless").        |
-| `availableData`     | `string`    | The duration of available data history.           |
-| `dealerPatientId`   | `string`    | The patient ID from the dealer.                   |
-| `organisation`      | `map`       | A map containing the organisation's name.         |
-| `clinicalUser`      | `map`       | A map containing the clinical user's name.        |
-| `compliance`        | `map`       | A map with compliance status and usage percentage.|
-| `dataAccess`        | `map`       | A map with data access type and duration.         |
+#### Fields
+
+| Field                   | Type        | Description                                                                        |
+| ----------------------- | ----------- | ---------------------------------------------------------------------------------- |
+| `airviewId`             | `string`    | The patient's ID in the AirView system (same as the document ID).                    |
+| `name`                  | `string`    | The patient's name as displayed in AirView.                                        |
+| `location`              | `string`    | The branch or location the patient belongs to (denormalized for filtering).        |
+| `monitoringType`        | `string`    | The type of data monitoring (e.g., "Wireless monitoring", or `null`).              |
+| `note`                  | `string`    | Additional notes (or `null`).                                                      |
+| `availableData`         | `string`    | The duration of available data history (e.g., "6 months").                         |
+| `isCompliant`           | `boolean`   | `true` if the patient has met compliance criteria.                                 |
+| `last30DaysCompliance`  | `number`    | The compliance percentage over the last 30 days.                                   |
+| `lastUpdatedSourceText` | `string`    | The text indicating the last update from AirView (e.g., "Yesterday").              |
+| `shouldExtract`         | `boolean`   | `true` if this patient's detailed data should be extracted in the next sync cycle. |
+| `lastUpdated`           | `timestamp` | The server timestamp of when this record was last synced by our system.            |
+
+### 1.2. `devices`
+
+This collection tracks individual CPAP devices to manage their link status with patients and prevent duplicate linking.
+
+-   **Collection:** `devices`
+-   **Document ID:** `auto_generated_uuid`
+
+#### Fields
+
+| Field          | Type        | Description                                                              |
+| -------------- | ----------- | ------------------------------------------------------------------------ |
+| `serialNumber` | `string`    | The unique serial number of the device (an index should be created).     |
+| `patientId`    | `string`    | The `airview_patient_id` of the patient this device is linked to.        |
+| `status`       | `string`    | The current status of the device (e.g., "linked", "unlink").             |
+| `linkedAt`     | `timestamp` | The timestamp when the device was last linked to a patient.              |
+| `unlinkedAt`   | `timestamp` | The timestamp when the device was unlinked (if applicable).              |
+| `createdAt`    | `timestamp` | The timestamp when this device record was first created in our system.   |
+| `updatedAt`    | `timestamp` | The timestamp of the last update to this record.                         |
 
 ---
 
 ## 2. Sub-collections
 
-Each customer document can contain the following sub-collections:
+Each `patient_list` document can contain the following sub-collections:
 
-### 2.1. `devices`
+### 2.1. `details`
 
-Stores a history of CPAP devices used by the patient.
+Stores the comprehensive details for a patient, typically scraped from the patient's detail page in AirView. There is usually only one document per patient in this sub-collection.
 
--   **Path:** `customers/{patientId}/devices/{deviceId}`
+-   **Path:** `patient_list/{patientId}/details/{detailId}`
 
-| Field          | Type        | Description                               |
-| -------------- | ----------- | ----------------------------------------- |
-| `deviceName`   | `string`    | The model name of the device.             |
-| `serialNumber` | `string`    | The device's unique serial number.        |
-| `addedDate`    | `timestamp` | The date the device was added.            |
-| `status`       | `string`    | The current status of the device.         |
-| `settings`     | `map`       | A map of all specific device settings.    |
+#### Fields
 
-### 2.2. `masks`
+| Field              | Type | Description                                             |
+| ------------------ | ---- | ------------------------------------------------------- |
+| `personalInfo`     | `map`| A map containing the patient's personal information.    |
+| `airviewInfo`      | `map`| A map containing data related to the AirView system.    |
+| `organizationInfo` | `map`| A map containing information about the caring organization. |
+| `system`           | `map`| A map containing system-generated metadata.             |
 
-Stores a history of masks used by the patient.
+### 2.2. `prescriptions`
 
--   **Path:** `customers/{patientId}/masks/{maskId}`
+Stores a history of prescriptions and device settings for the patient.
 
-| Field      | Type        | Description                     |
-| ---------- | ----------- | ------------------------------- |
-| `maskName` | `string`    | The model name of the mask.     |
-| `size`     | `string`    | The size of the mask.           |
-| `addedDate`| `timestamp` | The date the mask was added.    |
+-   **Path:** `patient_list/{patientId}/prescriptions/{prescriptionId}`
 
-### 2.3. `airTubing`
+#### Fields
 
-Stores a history of air tubing used by the patient.
+| Field        | Type | Description                                                              |
+| ------------ | ---- | ------------------------------------------------------------------------ |
+| `patientId`  | `string` | The patient's UUID (denormalized for client-side convenience).         |
+| `device`     | `map`| A map containing information about the prescribed device.              |
+| `settings`   | `map`| A map containing the therapy settings.                                 |
+| `climate`    | `map`| A map containing climate control settings.                             |
+| `monitoring` | `map`| A map containing data access and monitoring settings.                  |
+| `mask`       | `map`| A map containing information about the mask for this prescription.     |
+| `airTubing`  | `map`| A map containing information about the air tubing for this prescription. |
+| `system`     | `map`| A map containing system-generated metadata.                            |
 
--   **Path:** `customers/{patientId}/airTubing/{tubingId}`
+---
 
-| Field       | Type        | Description                      |
-| ----------- | ----------- | -------------------------------- |
-| `tubingName`| `string`    | The name of the air tubing.      |
-| `addedDate` | `timestamp` | The date the tubing was added.   |
+## 3. Firebase Authentication (`users`)
 
-### 2.4. `dailyReports`
+User management for the Admin Portal is handled by Firebase Authentication. A `users` collection in Firestore is not required unless additional user-specific data, such as roles (`admin`, `viewer`), needs to be stored. The user's Firebase UID serves as the unique identifier.
 
-Stores daily report data extracted from PDFs or other sources. The document ID is the date of the report in `YYYY-MM-DD` format for easy querying.
+---
+## 4. Deprecated Collections
 
--   **Path:** `customers/{patientId}/dailyReports/{reportDate}`
+The following collections are deprecated and their data models have been moved into the structure described above:
 
-| Field                     | Type        | Description                                           |
-| ------------------------- | ----------- | ----------------------------------------------------- |
-| `reportDate`              | `timestamp` | The specific date of the report.                      |
-| `usageHours`              | `string`    | Total usage time for the day.                         |
-| `cheyneStokesRespiration` | `string`    | Duration and percentage of Cheyne-Stokes respiration. |
-| `rera`                    | `number`    | Respiratory Effort-Related Arousal events.            |
-| `leak`                    | `map`       | A map containing median and 95th percentile leak data.|
-| `pressure`                | `map`       | A map containing median and 95th percentile pressure. |
-| `eventsPerHour`           | `map`       | A map of all respiratory events per hour (AHI, etc.). |
-| `deviceSnapshot`          | `map`       | A snapshot of the device settings during the report.  |
-
-## 3. Development and Deployment
-
-This section provides instructions for setting up the local development environment and deploying the application to Google Cloud Run.
-
-### 3.1. Local Development Setup
-
-Follow these steps to run the API on your local machine for development and testing.
-
-**Prerequisites:**
-- Python 3.8+
-- `pip` and `venv`
-- Google Cloud SDK (`gcloud` CLI) installed and authenticated.
-
-**Steps:**
-
-1.  **Clone the repository:**
-    ```bash
-    git clone <repository_url>
-    cd mega-care-api
-    ```
-
-2.  **Create and activate a virtual environment:**
-    ```bash
-    # For macOS/Linux
-    python3 -m venv venv
-    source venv/bin/activate
-
-    # For Windows
-    python -m venv venv
-    .\venv\Scripts\activate
-    ```
-
-3.  **Install dependencies:**
-    (Assuming a `requirements.txt` file exists in the project root)
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-4.  **Set up Firebase/Firestore Authentication:**
-    To connect to Firestore from your local machine, you need to authenticate using a service account.
-    a. In the Google Cloud Console, create a service account.
-    b. Grant the service account the "Cloud Datastore User" or "Editor" role for your project.
-    c. Create a JSON key for the service account and download it to a secure location on your computer.
-    d. Set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to the path of the downloaded JSON key file.
-    ```bash
-    # For macOS/Linux (add this to your .bashrc or .zshrc for persistence)
-    export GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/keyfile.json"
-    ```
-
-5.  **Run the application:**
-    Use `uvicorn` to start the local server. The `--reload` flag will automatically restart the server when code changes are detected.
-    ```bash
-    uvicorn app.main:app --reload
-    ```
-    The API will be available at `http://1227.0.0.1:8000`. You can access the interactive documentation at `http://127.0.0.1:8000/docs`.
-
-### 3.2. Deployment to Google Cloud Run
-
-Deployment is automated using Google Cloud Build, as defined in `cloudbuild.yaml`.
-
-**Prerequisites:**
-- A Google Cloud Project with billing enabled.
-- The following APIs enabled: Cloud Build API, Cloud Run Admin API, Artifact Registry API.
-- Your Google Cloud user account must have permissions to submit builds (e.g., "Cloud Build Editor" role).
-
-**Deployment Steps:**
-
-1.  **Ensure your `gcloud` CLI is configured for the correct project:**
-    ```bash
-    gcloud config set project YOUR_PROJECT_ID
-    ```
-
-2.  **Submit the build:**
-    From the root directory of the project, run the following command. This will trigger Cloud Build to execute the steps in `cloudbuild.yaml`.
-    ```bash
-    gcloud builds submit --config cloudbuild.yaml .
-    ```
+*   **`customers`**: Replaced by `patient_list`.
+*   **`patient_details`**: Replaced by the `details` sub-collection under `patient_list`.
+*   **`prescriptions`**: Replaced by the `prescriptions` sub-collection under `patient_list`.

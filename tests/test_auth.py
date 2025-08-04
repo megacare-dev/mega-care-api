@@ -71,14 +71,17 @@ def test_line_login_existing_user_success(mock_firestore_client, mock_create_tok
     already exists in the 'customers' collection.
     """
     # Arrange
+    mock_query = MagicMock()
     # 1. Mock Firestore to find an existing user
     mock_db = MagicMock()
     mock_firestore_client.return_value = mock_db
-    mock_query = MagicMock()
-    mock_db.collection.return_value.where.return_value.limit.return_value = mock_query
+    mock_collection_ref = MagicMock()
+    mock_db.collection.return_value = mock_collection_ref
 
     mock_customer_doc = MagicMock()
     mock_customer_doc.id = FAKE_FIREBASE_UID # The doc ID is the Firebase UID
+
+    mock_collection_ref.where.return_value.limit.return_value = mock_query
     mock_query.stream.return_value = [mock_customer_doc]
 
     # 2. Mock Firebase token creation
@@ -100,9 +103,14 @@ def test_line_login_existing_user_success(mock_firestore_client, mock_create_tok
 
     # Assert Firestore and Firebase Auth interactions
     mock_db.collection.assert_called_once_with("customers")
-    mock_db.collection.return_value.where.assert_called_once_with(
-        filter=FieldFilter("lineId", "==", FAKE_LINE_USER_ID)
-    )
+    # Assert the where clause by inspecting the filter object
+    mock_collection_ref.where.assert_called_once()
+    _call_args, call_kwargs = mock_collection_ref.where.call_args
+    called_filter = call_kwargs.get('filter')
+    assert isinstance(called_filter, FieldFilter)
+    assert called_filter.field_path == "lineId"
+    assert called_filter.op_string == "=="
+    assert called_filter.value == FAKE_LINE_USER_ID
     # Assert that custom claims are now being passed
     expected_claims = {'provider': 'line', 'line_user_id': FAKE_LINE_USER_ID}
     mock_create_token.assert_called_once_with(FAKE_FIREBASE_UID, expected_claims)
@@ -116,12 +124,14 @@ def test_line_login_new_user_registration_required(mock_firestore_client, mock_c
     is found, requiring the client to proceed with registration.
     """
     # Arrange
+    mock_query = MagicMock()
     # 1. Mock Firestore to find NO user
     mock_db = MagicMock()
     mock_firestore_client.return_value = mock_db
-    mock_query = MagicMock()
-    mock_db.collection.return_value.where.return_value.limit.return_value = mock_query
-    mock_query.stream.return_value = [] # No documents found
+    mock_collection_ref = MagicMock()
+    mock_db.collection.return_value = mock_collection_ref
+    mock_collection_ref.where.return_value.limit.return_value = mock_query
+    mock_query.stream.return_value = []  # No documents found
 
     request_payload = {
         "authorization_code": "some_auth_code",
@@ -144,9 +154,14 @@ def test_line_login_new_user_registration_required(mock_firestore_client, mock_c
     assert line_profile["picture_url"] == FAKE_PICTURE_URL
     assert line_profile["email"] == FAKE_EMAIL
 
-    mock_db.collection.return_value.where.assert_called_once_with(
-        filter=FieldFilter("lineId", "==", FAKE_LINE_USER_ID)
-    )
+    # Assert the where clause by inspecting the filter object
+    mock_collection_ref.where.assert_called_once()
+    _call_args, call_kwargs = mock_collection_ref.where.call_args
+    called_filter = call_kwargs.get('filter')
+    assert isinstance(called_filter, FieldFilter)
+    assert called_filter.field_path == "lineId"
+    assert called_filter.op_string == "=="
+    assert called_filter.value == FAKE_LINE_USER_ID
 
     # Assert that no Firebase token was created
     mock_create_token.assert_not_called()

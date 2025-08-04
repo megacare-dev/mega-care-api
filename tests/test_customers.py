@@ -540,6 +540,8 @@ def test_link_device_preserves_line_profile(mock_firestore_client):
     # Arrange
     mock_db = MagicMock()
     mock_firestore_client.return_value = mock_db
+    mock_collection_group_ref = MagicMock()
+    mock_db.collection_group.return_value = mock_collection_group_ref
 
     # --- Mocking the Collection Group Query ---
     PRE_EXISTING_CUSTOMER_ID = "pre-existing-customer-123"
@@ -565,7 +567,9 @@ def test_link_device_preserves_line_profile(mock_firestore_client):
     mock_device_doc.id = "device-doc-id"
     mock_device_doc.reference.parent = mock_devices_collection_ref
     mock_device_doc.to_dict.return_value = mock_device_data
-    mock_db.collection_group.return_value.where.return_value.limit.return_value.stream.return_value = [mock_device_doc]
+    mock_query = MagicMock()
+    mock_collection_group_ref.where.return_value.limit.return_value = mock_query
+    mock_query.stream.return_value = [mock_device_doc]
 
     # --- Mocking the collection calls ---
     mock_customers_collection = MagicMock()
@@ -622,12 +626,17 @@ def test_link_device_preserves_line_profile(mock_firestore_client):
 
     # Assert Firestore calls
     mock_db.collection_group.assert_called_once_with("devices")
-    mock_db.collection_group.return_value.where.assert_called_once_with(
-        filter=And([
-            FieldFilter("serialNumber", "==", request_payload["serial_number"]),
-            FieldFilter("status", "==", "unlink")
-        ])
-    )
+    # Assert the where clause by inspecting the filter object
+    mock_collection_group_ref.where.assert_called_once()
+    _call_args, call_kwargs = mock_collection_group_ref.where.call_args
+    called_filter = call_kwargs.get('filter')
+    assert isinstance(called_filter, And)
+    assert len(called_filter.filters) == 2
+    # Check for presence of both filters, order-independent
+    filters = called_filter.filters
+    assert any(f.field_path == "serialNumber" and f.op_string == "==" and f.value == request_payload["serial_number"] for f in filters)
+    assert any(f.field_path == "status" and f.op_string == "==" and f.value == "unlink" for f in filters)
+
     mock_customers_collection.document.assert_called_once_with(FAKE_USER_UID)
     # Assert that the copy to 'patient_list' collection DID NOT happen
     mock_patient_list_collection.document.assert_not_called()
@@ -675,6 +684,8 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
     # Arrange
     mock_db = MagicMock()
     mock_firestore_client.return_value = mock_db
+    mock_collection_group_ref = MagicMock()
+    mock_db.collection_group.return_value = mock_collection_group_ref
 
     # --- Mocking the Collection Group Query ---
     PRE_EXISTING_CUSTOMER_ID = "pre-existing-customer-123"
@@ -701,7 +712,9 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
     mock_device_doc.reference.parent = mock_devices_collection_ref
     mock_device_doc.to_dict.return_value = mock_device_data
     mock_device_doc.id = "device-doc-id"
-    mock_db.collection_group.return_value.where.return_value.limit.return_value.stream.return_value = [mock_device_doc]
+    mock_query = MagicMock()
+    mock_collection_group_ref.where.return_value.limit.return_value = mock_query
+    mock_query.stream.return_value = [mock_device_doc]
 
     # --- Mocking the Firestore collection calls ---
     mock_customers_collection = MagicMock()
@@ -753,12 +766,17 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
     assert response.status_code == 200
 
     # Assert where call
-    mock_db.collection_group.return_value.where.assert_called_once_with(
-        filter=And([
-            FieldFilter("serialNumber", "==", request_payload["serial_number"]),
-            FieldFilter("status", "==", "unlink")
-        ])
-    )
+    # Assert the where clause by inspecting the filter object
+    mock_collection_group_ref.where.assert_called_once()
+    _call_args, call_kwargs = mock_collection_group_ref.where.call_args
+    called_filter = call_kwargs.get('filter')
+    assert isinstance(called_filter, And)
+    assert len(called_filter.filters) == 2
+    # Check for presence of both filters, order-independent
+    filters = called_filter.filters
+    assert any(f.field_path == "serialNumber" and f.op_string == "==" and f.value == request_payload["serial_number"] for f in filters)
+    assert any(f.field_path == "status" and f.op_string == "==" and f.value == "unlink" for f in filters)
+
     # Assert the copy to 'patient_list' collection
     mock_patient_list_collection.document.assert_called_once_with(DEVICE_PATIENT_ID_FIELD)
 
@@ -791,7 +809,11 @@ def test_link_device_not_found_in_firestore(mock_firestore_client):
     # Arrange
     mock_db = MagicMock()
     mock_firestore_client.return_value = mock_db
-    mock_db.collection_group.return_value.where.return_value.limit.return_value.stream.return_value = []
+    mock_collection_group_ref = MagicMock()
+    mock_db.collection_group.return_value = mock_collection_group_ref
+    mock_query = MagicMock()
+    mock_collection_group_ref.where.return_value.limit.return_value = mock_query
+    mock_query.stream.return_value = []
     request_payload = {"serial_number": "INVALID_SN", "device_number": "999"}
 
     # Act
@@ -800,9 +822,13 @@ def test_link_device_not_found_in_firestore(mock_firestore_client):
     # Assert
     assert response.status_code == 404
     assert "No patient record found" in response.json()["detail"]
-    mock_db.collection_group.return_value.where.assert_called_once_with(
-        filter=And([
-            FieldFilter("serialNumber", "==", request_payload["serial_number"]),
-            FieldFilter("status", "==", "unlink")
-        ])
-    )
+    # Assert the where clause by inspecting the filter object
+    mock_collection_group_ref.where.assert_called_once()
+    _call_args, call_kwargs = mock_collection_group_ref.where.call_args
+    called_filter = call_kwargs.get('filter')
+    assert isinstance(called_filter, And)
+    assert len(called_filter.filters) == 2
+    # Check for presence of both filters, order-independent
+    filters = called_filter.filters
+    assert any(f.field_path == "serialNumber" and f.op_string == "==" and f.value == request_payload["serial_number"] for f in filters)
+    assert any(f.field_path == "status" and f.op_string == "==" and f.value == "unlink" for f in filters)
