@@ -98,7 +98,7 @@ This phase outlines the "Login or Register" flow using LINE and Email, user prof
 - [x] **Implement Device Linking as a Separate Action: `POST /api/v1/customers/me/link-device`**
   - [x] This endpoint is protected and used by an authenticated user at any time post-login.
   - [x] Receive the device Serial Number (SN) from the client.
-  - [x] Find the device with a status of "unlink" using a `collection_group` query across all `devices` collections.
+  - [x] Find the device with a status of "unlinked" using a `collection_group` query across all `devices` collections.
   - [x] If a matching device is found:
     - [x] Identify the associated pre-existing patient profile. This profile could be the parent document in the `customers` collection OR a document in the `patient_list` collection referenced by a `patientId` field in the device document.
     - [x] Merge the data from the found profile into the current user's `customers` document, preserving the user's LINE profile information.

@@ -562,7 +562,7 @@ def test_link_device_preserves_line_profile(mock_firestore_client):
     mock_devices_collection_ref.parent = mock_pre_existing_customer_ref
 
     # Device data. The 'patientId' field is None/missing in this scenario.
-    mock_device_data = {"serialNumber": "SN123456789", "deviceNumber": "987", "status": "unlink"}
+    mock_device_data = {"serialNumber": "SN123456789", "deviceNumber": "987", "status": "unlinked"}
     mock_device_doc = MagicMock()
     mock_device_doc.id = "device-doc-id"
     mock_device_doc.reference.parent = mock_devices_collection_ref
@@ -635,7 +635,7 @@ def test_link_device_preserves_line_profile(mock_firestore_client):
     # Check for presence of both filters, order-independent
     filters = called_filter.filters
     assert any(f.field_path == "serialNumber" and f.op_string == "==" and f.value == request_payload["serial_number"] for f in filters)
-    assert any(f.field_path == "status" and f.op_string == "==" and f.value == "unlink" for f in filters)
+    assert any(f.field_path == "status" and f.op_string == "==" and f.value == "unlinked" for f in filters)
 
     mock_customers_collection.document.assert_called_once_with(FAKE_USER_UID)
     # Assert that the copy to 'patient_list' collection DID NOT happen
@@ -707,7 +707,7 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
     mock_devices_collection_ref.parent = mock_pre_existing_customer_ref
 
     # This is the key part: the device document now has a 'patientId'
-    mock_device_data = {"serialNumber": "SN123456789", "patientId": DEVICE_PATIENT_ID_FIELD, "deviceNumber": "987", "status": "unlink"}
+    mock_device_data = {"serialNumber": "SN123456789", "patientId": DEVICE_PATIENT_ID_FIELD, "deviceNumber": "987", "status": "unlinked"}
     mock_device_doc = MagicMock()
     mock_device_doc.reference.parent = mock_devices_collection_ref
     mock_device_doc.to_dict.return_value = mock_device_data
@@ -775,7 +775,7 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
     # Check for presence of both filters, order-independent
     filters = called_filter.filters
     assert any(f.field_path == "serialNumber" and f.op_string == "==" and f.value == request_payload["serial_number"] for f in filters)
-    assert any(f.field_path == "status" and f.op_string == "==" and f.value == "unlink" for f in filters)
+    assert any(f.field_path == "status" and f.op_string == "==" and f.value == "unlinked" for f in filters)
 
     # Assert the copy to 'patient_list' collection
     mock_patient_list_collection.document.assert_called_once_with(DEVICE_PATIENT_ID_FIELD)
@@ -831,4 +831,4 @@ def test_link_device_not_found_in_firestore(mock_firestore_client):
     # Check for presence of both filters, order-independent
     filters = called_filter.filters
     assert any(f.field_path == "serialNumber" and f.op_string == "==" and f.value == request_payload["serial_number"] for f in filters)
-    assert any(f.field_path == "status" and f.op_string == "==" and f.value == "unlink" for f in filters)
+    assert any(f.field_path == "status" and f.op_string == "==" and f.value == "unlinked" for f in filters)

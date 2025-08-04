@@ -329,7 +329,7 @@ This collection tracks individual CPAP devices to manage their link status with 
 | -------------- | ----------- | ------------------------------------------------------------------------ |
 | `serialNumber` | `string`    | The unique serial number of the device (an index should be created).     |
 | `patientId`    | `string`    | The `airview_patient_id` of the patient this device is linked to.        |
-| `status`       | `string`    | The current status of the device (e.g., "linked", "unlink").             |
+| `status`       | `string`    | The current status of the device (e.g., "linked", "unlinked").           |
 | `linkedAt`     | `timestamp` | The timestamp when the device was last linked to a patient.              |
 | `unlinkedAt`   | `timestamp` | The timestamp when the device was unlinked (if applicable).              |
 | `createdAt`    | `timestamp` | The timestamp when this device record was first created in our system.   |

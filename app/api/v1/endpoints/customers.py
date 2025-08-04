@@ -263,7 +263,7 @@ def link_device_to_profile(
     device_query = db.collection_group("devices").where(
         filter=And([
             FieldFilter("serialNumber", "==", link_request.serial_number),
-            FieldFilter("status", "==", "unlink")
+            FieldFilter("status", "==", "unlinked")
         ])
     ).limit(1)
     try:
