@@ -316,7 +316,7 @@ def link_device_to_profile(
     pre_existing_customer_data = pre_existing_customer_doc.to_dict()
     
     # 3. As per specification, copy the found customer document to a 'patient_list'
-    # collection, using the 'patientId' from the device document as the new doc ID.
+    # collection, using the 'patientId' from the device document as the new doc ID. 
     patient_id_from_device = device_data.get("patientId")
     if patient_id_from_device:
         try:
