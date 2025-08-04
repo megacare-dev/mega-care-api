@@ -20,7 +20,8 @@ class ClinicalUserMap(BaseModel):
 
 class DataAccessMap(BaseModel):
     type: Optional[str] = None
-    duration: Optional[str] = None
+    # The new spec uses a timestamp for monitoringUntil, not a string duration.
+    monitoring_until: Optional[datetime] = Field(None, alias="monitoringUntil")
     model_config = ConfigDict(populate_by_name=True)
 
 class LeakMap(BaseModel):
@@ -64,6 +65,8 @@ class CustomerBase(BaseModel):
     monitoring_type: Optional[str] = Field(None, alias="monitoringType")
     available_data: Optional[str] = Field(None, alias="availableData")
     dealer_patient_id: Optional[str] = Field(None, alias="dealerPatientId")
+    note: Optional[str] = None
+    last_updated_source_text: Optional[str] = Field(None, alias="lastUpdatedSourceText")
     line_profile: Optional[LineUserProfile] = Field(None, alias="lineProfile")
     model_config = ConfigDict(populate_by_name=True)
 
@@ -93,8 +96,9 @@ class Customer(CustomerBase):
     setup_date: datetime = Field(..., alias="setupDate")
     organisation: Optional[OrganisationMap] = None
     clinical_user: Optional[ClinicalUserMap] = Field(None, alias="clinicalUser")
-    compliance: Optional[ComplianceMap] = None
     data_access: Optional[DataAccessMap] = Field(None, alias="dataAccess")
+    is_compliant: Optional[bool] = Field(None, alias="isCompliant")
+    last_30_days_compliance: Optional[float] = Field(None, alias="last30DaysCompliance")
     model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
 # --- Equipment Schemas ---

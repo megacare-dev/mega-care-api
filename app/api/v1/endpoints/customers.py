@@ -341,6 +341,15 @@ def link_device_to_profile(
     # Start with the pre-existing data as the base.
     data_to_write = pre_existing_customer_data.copy()
 
+    # Ensure required fields for the Customer schema are present before writing.
+    # The pre-existing profile (e.g., from 'patient_list') might use 'name' instead of 'displayName'.
+    if 'displayName' not in data_to_write and 'name' in data_to_write:
+        data_to_write['displayName'] = data_to_write['name']
+
+    # The pre-existing profile might not have a 'setupDate'.
+    if 'setupDate' not in data_to_write:
+        data_to_write['setupDate'] = datetime.now(timezone.utc)
+
     # Preserve key fields from the current user's profile (from LINE login).
     if "lineProfile" in current_user_data:
         data_to_write["lineProfile"] = current_user_data["lineProfile"]
