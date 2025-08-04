@@ -4,6 +4,7 @@ import jwt
 import logging
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
+from google.cloud.firestore_v1.base_query import FieldFilter
 from firebase_admin import auth, firestore
 
 router = APIRouter()
@@ -104,7 +105,7 @@ async def line_login(payload: LineLoginRequest):
     db = firestore.client()
     customers_ref = db.collection("customers")
     # Note: This query requires a Firestore index on the 'lineId' field.
-    query = customers_ref.where("lineId", "==", line_user_id).limit(1)
+    query = customers_ref.where(filter=FieldFilter("lineId", "==", line_user_id)).limit(1)
     
     try:
         docs = list(query.stream())

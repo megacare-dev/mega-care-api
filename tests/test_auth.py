@@ -1,5 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
+from google.cloud.firestore_v1.base_query import FieldFilter
 from unittest.mock import patch, MagicMock, AsyncMock
 
 # To test the router, we need a FastAPI app instance
@@ -99,7 +100,9 @@ def test_line_login_existing_user_success(mock_firestore_client, mock_create_tok
 
     # Assert Firestore and Firebase Auth interactions
     mock_db.collection.assert_called_once_with("customers")
-    mock_db.collection.return_value.where.assert_called_once_with("lineId", "==", FAKE_LINE_USER_ID)
+    mock_db.collection.return_value.where.assert_called_once_with(
+        filter=FieldFilter("lineId", "==", FAKE_LINE_USER_ID)
+    )
     # Assert that custom claims are now being passed
     expected_claims = {'provider': 'line', 'line_user_id': FAKE_LINE_USER_ID}
     mock_create_token.assert_called_once_with(FAKE_FIREBASE_UID, expected_claims)
@@ -140,6 +143,10 @@ def test_line_login_new_user_registration_required(mock_firestore_client, mock_c
     assert line_profile["display_name"] == FAKE_DISPLAY_NAME
     assert line_profile["picture_url"] == FAKE_PICTURE_URL
     assert line_profile["email"] == FAKE_EMAIL
+
+    mock_db.collection.return_value.where.assert_called_once_with(
+        filter=FieldFilter("lineId", "==", FAKE_LINE_USER_ID)
+    )
 
     # Assert that no Firebase token was created
     mock_create_token.assert_not_called()

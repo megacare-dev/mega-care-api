@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, status, HTTPException, Query
 from typing import List, Dict
 from datetime import datetime, date, timezone
 import logging
+from google.cloud.firestore_v1.base_query import FieldFilter, And
 from firebase_admin import firestore
 
 from app.api.v1 import schemas
@@ -259,7 +260,12 @@ def link_device_to_profile(
     # This searches all 'devices' sub-collections for a matching serial number.
     # The device must also have a status of "unlink" to be available for linking.
     # This requires a composite index in Firestore on (serialNumber, status).
-    device_query = db.collection_group("devices").where("serialNumber", "==", link_request.serialNumber).where("status", "==", "unlink").limit(1)
+    device_query = db.collection_group("devices").where(
+        filter=And([
+            FieldFilter("serialNumber", "==", link_request.serialNumber),
+            FieldFilter("status", "==", "unlink")
+        ])
+    ).limit(1)
     try:
         device_docs = list(device_query.stream())
     except Exception as e:
@@ -296,7 +302,7 @@ def link_device_to_profile(
                 detail="Device found, but it is not linked to any patient profile."
             )
         logging.info(f"Device is a root document. Looking up patient via 'patientId' field: {patient_id}")
-        pre_existing_customer_ref = db.collection("patients").document(patient_id)
+        pre_existing_customer_ref = db.collection("patient_list").document(patient_id)
     pre_existing_customer_doc = pre_existing_customer_ref.get()
 
 
@@ -309,22 +315,22 @@ def link_device_to_profile(
 
     pre_existing_customer_data = pre_existing_customer_doc.to_dict()
     
-    # 3. As per specification, copy the found customer document to a 'patients'
+    # 3. As per specification, copy the found customer document to a 'patient_list'
     # collection, using the 'patientId' from the device document as the new doc ID.
     patient_id_from_device = device_data.get("patientId")
     if patient_id_from_device:
         try:
-            # Create a separate dictionary for the 'patients' collection to avoid
+            # Create a separate dictionary for the 'patient_list' collection to avoid
             # mutating the original data that will be merged into the 'customers' profile.
             data_for_patients = pre_existing_customer_data.copy()
             data_for_patients["customerId"] = user_uid # This links the patient record back to the LINE user.
-            logging.info(f"Copying customer profile {pre_existing_customer_doc.id} to 'patients' collection with ID {patient_id_from_device}")
-            db.collection("patients").document(patient_id_from_device).set(data_for_patients, merge=True)
+            logging.info(f"Copying customer profile {pre_existing_customer_doc.id} to 'patient_list' collection with ID {patient_id_from_device}")
+            db.collection("patient_list").document(patient_id_from_device).set(data_for_patients, merge=True)
         except Exception as e:
             # This is treated as a non-critical error. The primary linking can still proceed.
-            logging.warning(f"Could not copy profile to 'patients' collection for patientId {patient_id_from_device}: {e}")
+            logging.warning(f"Could not copy profile to 'patient_list' collection for patientId {patient_id_from_device}: {e}")
     else:
-        logging.info(f"Device document {found_device_doc.id} does not contain a 'patientId' field. Skipping copy to 'patients' collection.")
+        logging.info(f"Device document {found_device_doc.id} does not contain a 'patientId' field. Skipping copy to 'patient_list' collection.")
 
     # 4. Fetch the current user's profile to preserve key identity fields like lineProfile.
     current_user_customer_ref = db.collection("customers").document(user_uid)

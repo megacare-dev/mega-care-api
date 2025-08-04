@@ -1,5 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
+from google.cloud.firestore_v1.base_query import FieldFilter, And
 from unittest.mock import patch, MagicMock
 from datetime import datetime, date, timezone
 
@@ -564,14 +565,14 @@ def test_link_device_preserves_line_profile(mock_firestore_client):
     mock_device_doc.id = "device-doc-id"
     mock_device_doc.reference.parent = mock_devices_collection_ref
     mock_device_doc.to_dict.return_value = mock_device_data
-    mock_db.collection_group.return_value.where.return_value.where.return_value.limit.return_value.stream.return_value = [mock_device_doc]
+    mock_db.collection_group.return_value.where.return_value.limit.return_value.stream.return_value = [mock_device_doc]
 
     # --- Mocking the collection calls ---
     mock_customers_collection = MagicMock()
-    mock_patients_collection = MagicMock()
+    mock_patient_list_collection = MagicMock()
     def collection_side_effect(name):
         if name == "customers": return mock_customers_collection
-        if name == "patients": return mock_patients_collection
+        if name == "patient_list": return mock_patient_list_collection
         return MagicMock()
     mock_db.collection.side_effect = collection_side_effect
 
@@ -621,9 +622,15 @@ def test_link_device_preserves_line_profile(mock_firestore_client):
 
     # Assert Firestore calls
     mock_db.collection_group.assert_called_once_with("devices")
+    mock_db.collection_group.return_value.where.assert_called_once_with(
+        filter=And([
+            FieldFilter("serialNumber", "==", request_payload["serial_number"]),
+            FieldFilter("status", "==", "unlink")
+        ])
+    )
     mock_customers_collection.document.assert_called_once_with(FAKE_USER_UID)
-    # Assert that the copy to 'patients' collection DID NOT happen
-    mock_patients_collection.document.assert_not_called()
+    # Assert that the copy to 'patient_list' collection DID NOT happen
+    mock_patient_list_collection.document.assert_not_called()
 
     # Assert the data written to the user's profile
     mock_current_user_customer_ref.set.assert_called_once()
@@ -662,7 +669,7 @@ def test_link_device_preserves_line_profile(mock_firestore_client):
 def test_link_device_copies_to_patients_collection(mock_firestore_client):
     """
     Tests that linking a device correctly copies the pre-existing profile
-    to the 'patients' collection when the device doc has a 'patientId' field,
+    to the 'patient_list' collection when the device doc has a 'patientId' field,
     and that the user's lineProfile is preserved.
     """
     # Arrange
@@ -694,14 +701,14 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
     mock_device_doc.reference.parent = mock_devices_collection_ref
     mock_device_doc.to_dict.return_value = mock_device_data
     mock_device_doc.id = "device-doc-id"
-    mock_db.collection_group.return_value.where.return_value.where.return_value.limit.return_value.stream.return_value = [mock_device_doc]
+    mock_db.collection_group.return_value.where.return_value.limit.return_value.stream.return_value = [mock_device_doc]
 
     # --- Mocking the Firestore collection calls ---
     mock_customers_collection = MagicMock()
-    mock_patients_collection = MagicMock()
+    mock_patient_list_collection = MagicMock()
     def collection_side_effect(name):
         if name == "customers": return mock_customers_collection
-        if name == "patients": return mock_patients_collection
+        if name == "patient_list": return mock_patient_list_collection
         return MagicMock() # Default mock for other collections
     mock_db.collection.side_effect = collection_side_effect
 
@@ -733,9 +740,9 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
     mock_current_user_customer_ref.get.side_effect = [mock_current_user_initial_doc, mock_updated_doc]
     mock_customers_collection.document.return_value = mock_current_user_customer_ref
 
-    # --- Mocking the set call on the 'patients' collection ---
+    # --- Mocking the set call on the 'patient_list' collection ---
     mock_new_patient_doc_ref = MagicMock()
-    mock_patients_collection.document.return_value = mock_new_patient_doc_ref
+    mock_patient_list_collection.document.return_value = mock_new_patient_doc_ref
 
     request_payload = {"serial_number": "SN123456789", "device_number": "987"}
 
@@ -745,8 +752,15 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
     # Assert
     assert response.status_code == 200
 
-    # Assert the copy to 'patients' collection
-    mock_patients_collection.document.assert_called_once_with(DEVICE_PATIENT_ID_FIELD)
+    # Assert where call
+    mock_db.collection_group.return_value.where.assert_called_once_with(
+        filter=And([
+            FieldFilter("serialNumber", "==", request_payload["serial_number"]),
+            FieldFilter("status", "==", "unlink")
+        ])
+    )
+    # Assert the copy to 'patient_list' collection
+    mock_patient_list_collection.document.assert_called_once_with(DEVICE_PATIENT_ID_FIELD)
 
     # The endpoint adds the 'customerId' (the logged-in user's UID) to the data.
     expected_data_for_patients_collection = pre_existing_customer_data.copy()
@@ -786,3 +800,9 @@ def test_link_device_not_found_in_firestore(mock_firestore_client):
     # Assert
     assert response.status_code == 404
     assert "No patient record found" in response.json()["detail"]
+    mock_db.collection_group.return_value.where.assert_called_once_with(
+        filter=And([
+            FieldFilter("serialNumber", "==", request_payload["serial_number"]),
+            FieldFilter("status", "==", "unlink")
+        ])
+    )
