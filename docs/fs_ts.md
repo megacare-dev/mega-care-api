@@ -90,83 +90,111 @@ class EventsPerHourMap(BaseModel):
     hypopneas: Optional[float] = None
     # ... other event types
 
+# --- LINE Schemas ---
+class LineProfile(BaseModel):
+    user_id: str = Field(..., alias="userId")
+    display_name: str = Field(..., alias="displayName")
+    picture_url: Optional[str] = Field(None, alias="pictureUrl")
+
 # --- Customer Schemas ---
 class CustomerBase(BaseModel):
-    lineId: Optional[str] = None
-    displayName: str
+    line_id: Optional[str] = Field(None, alias="lineId")
+    display_name: str = Field(..., alias="displayName")
     title: Optional[str] = None
-    firstName: str
-    lastName: str
+    first_name: str = Field(..., alias="firstName")
+    last_name: str = Field(..., alias="lastName")
     dob: date
+    phone_number: Optional[str] = Field(None, alias="phoneNumber")
     location: Optional[str] = None
     status: str = "Active"
-    airViewNumber: Optional[str] = None
-    monitoringType: Optional[str] = None
-    availableData: Optional[str] = None
-    dealerPatientId: Optional[str] = None
+    air_view_number: Optional[str] = Field(None, alias="airViewNumber")
+    monitoring_type: Optional[str] = Field(None, alias="monitoringType")
+    available_data: Optional[str] = Field(None, alias="availableData")
+    dealer_patient_id: Optional[str] = Field(None, alias="dealerPatientId")
+    line_profile: Optional[LineProfile] = Field(None, alias="lineProfile")
+
+    class Config:
+        populate_by_name = True # Allows creating model with both alias and field name
+        allow_population_by_field_name = True
 
 class CustomerCreate(CustomerBase):
     pass
 
 class Customer(CustomerBase):
-    id: str = Field(..., alias="patientId")
-    setupDate: datetime
+    patient_id: str = Field(..., alias="patientId")
+    setup_date: datetime = Field(..., alias="setupDate")
     organisation: Optional[OrganisationMap] = None
-    clinicalUser: Optional[ClinicalUserMap] = None
+    clinical_user: Optional[ClinicalUserMap] = Field(None, alias="clinicalUser")
     compliance: Optional[ComplianceMap] = None
-    dataAccess: Optional[DataAccessMap] = None
+    data_access: Optional[DataAccessMap] = Field(None, alias="dataAccess")
 
 # --- Equipment Schemas ---
 class DeviceBase(BaseModel):
-    deviceName: str
-    serialNumber: str
+    device_name: str = Field(..., alias="deviceName")
+    serial_number: str = Field(..., alias="serialNumber")
     status: str = "Active"
     settings: Optional[Dict] = None
+
+    class Config:
+        populate_by_name = True
+        allow_population_by_field_name = True
 
 class DeviceCreate(DeviceBase):
     pass
 
 class Device(DeviceBase):
-    id: str = Field(..., alias="deviceId")
-    addedDate: datetime
+    device_id: str = Field(..., alias="deviceId")
+    added_date: datetime = Field(..., alias="addedDate")
 
 class MaskBase(BaseModel):
-    maskName: str
+    mask_name: str = Field(..., alias="maskName")
     size: str
+
+    class Config:
+        populate_by_name = True
+        allow_population_by_field_name = True
 
 class MaskCreate(MaskBase):
     pass
 
 class Mask(MaskBase):
-    id: str = Field(..., alias="maskId")
-    addedDate: datetime
+    mask_id: str = Field(..., alias="maskId")
+    added_date: datetime = Field(..., alias="addedDate")
 
 class AirTubingBase(BaseModel):
-    tubingName: str
+    tubing_name: str = Field(..., alias="tubingName")
+
+    class Config:
+        populate_by_name = True
+        allow_population_by_field_name = True
 
 class AirTubingCreate(AirTubingBase):
     pass
 
 class AirTubing(AirTubingBase):
-    id: str = Field(..., alias="tubingId")
-    addedDate: datetime
+    tubing_id: str = Field(..., alias="tubingId")
+    added_date: datetime = Field(..., alias="addedDate")
 
 # --- Report Schemas ---
 class DailyReportBase(BaseModel):
-    reportDate: date
-    usageHours: float
-    cheyneStokesRespiration: Optional[str] = None
+    report_date: date = Field(..., alias="reportDate")
+    usage_hours: float = Field(..., alias="usageHours")
+    cheyne_stokes_respiration: Optional[str] = Field(None, alias="cheyneStokesRespiration")
     rera: Optional[float] = None
     leak: LeakMap
     pressure: PressureMap
-    eventsPerHour: EventsPerHourMap
-    deviceSnapshot: Optional[Dict] = None
+    events_per_hour: EventsPerHourMap = Field(..., alias="eventsPerHour")
+    device_snapshot: Optional[Dict] = Field(None, alias="deviceSnapshot")
+
+    class Config:
+        populate_by_name = True
+        allow_population_by_field_name = True
 
 class DailyReportCreate(DailyReportBase):
     pass
 
 class DailyReport(DailyReportBase):
-    id: str = Field(..., alias="reportId") # Will be the YYYY-MM-DD date string
+    report_id: str = Field(..., alias="reportId") # Will be the YYYY-MM-DD date string
 
 2.3. API Endpoints
 Customer Endpoints

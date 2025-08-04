@@ -586,7 +586,7 @@ def test_link_device_preserves_line_profile(mock_firestore_client):
         "lineId": FAKE_USER_UID,
         "displayName": "Test User From Line",
         "status": "Active",
-        "createDate": datetime.now(timezone.utc),
+        "setupDate": datetime.now(timezone.utc),
         "lineProfile": {
             "userId": FAKE_USER_UID,
             "displayName": "Test User From Line",
@@ -671,7 +671,7 @@ def test_link_device_preserves_line_profile(mock_firestore_client):
     assert response_data["patient_id"] == FAKE_USER_UID
     assert response_data["first_name"] == "John"
     assert response_data["dob"] == "1985-06-15"
-    assert response_data["line_profile"]["userId"] == FAKE_USER_UID
+    assert response_data["line_profile"]["user_id"] == FAKE_USER_UID
 
 
 @patch('app.api.v1.endpoints.customers.firestore.client')

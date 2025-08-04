@@ -10,7 +10,7 @@ from app.dependencies.auth import get_current_user
 
 router = APIRouter()
 
-@router.post("/me", response_model=schemas.Customer, status_code=status.HTTP_201_CREATED)
+@router.post("/me", response_model=schemas.Customer, status_code=status.HTTP_201_CREATED, response_model_by_alias=False)
 def create_customer_profile(
     *,
     customer_in: schemas.CustomerProfilePayload,
@@ -34,7 +34,7 @@ def create_customer_profile(
         )
 
     # Use exclude_unset=True for partial updates.
-    customer_data = customer_in.model_dump(exclude_unset=True)
+    customer_data = customer_in.model_dump(by_alias=True, exclude_unset=True)
 
     # If displayName is not provided, try to construct it from first/last name.
     if 'displayName' not in customer_data and 'firstName' in customer_data and 'lastName' in customer_data:
@@ -74,10 +74,10 @@ def create_customer_profile(
     response_data = new_customer_doc.to_dict()
     response_data["patientId"] = new_customer_doc.id
 
-    return response_data
+    return schemas.Customer.model_validate(response_data)
 
 
-@router.get("/me", response_model=schemas.Customer)
+@router.get("/me", response_model=schemas.Customer, response_model_by_alias=False)
 def get_my_profile(current_user: Dict = Depends(get_current_user)):
     """
     Retrieve the profile of the currently authenticated user.
@@ -103,10 +103,10 @@ def get_my_profile(current_user: Dict = Depends(get_current_user)):
     logging.info(f"Successfully retrieved profile for UID: {user_uid}")
     response_data = doc.to_dict()
     response_data["patientId"] = doc.id
-    return response_data
+    return schemas.Customer.model_validate(response_data)
 
 
-@router.post("/me/devices", response_model=schemas.Device, status_code=status.HTTP_201_CREATED)
+@router.post("/me/devices", response_model=schemas.Device, status_code=status.HTTP_201_CREATED, response_model_by_alias=False)
 def add_a_device(
     *,
     device_in: schemas.DeviceCreate,
@@ -119,7 +119,7 @@ def add_a_device(
     user_uid = current_user["uid"]
     devices_ref = db.collection("customers").document(user_uid).collection("devices")
 
-    device_data = device_in.model_dump()
+    device_data = device_in.model_dump(by_alias=True)
     device_data["addedDate"] = datetime.now(timezone.utc)
 
     # .add() creates a new document with an auto-generated ID
@@ -130,10 +130,10 @@ def add_a_device(
     response_data = new_device_doc.to_dict()
     response_data["deviceId"] = new_device_doc.id
 
-    return response_data
+    return schemas.Device.model_validate(response_data)
 
 
-@router.get("/me/devices", response_model=List[schemas.Device])
+@router.get("/me/devices", response_model=List[schemas.Device], response_model_by_alias=False)
 def get_my_devices(current_user: Dict = Depends(get_current_user)):
     """
     Retrieve a list of all devices for the authenticated patient.
@@ -147,12 +147,12 @@ def get_my_devices(current_user: Dict = Depends(get_current_user)):
     for doc in devices_ref.stream():
         device_data = doc.to_dict()
         device_data["deviceId"] = doc.id
-        devices.append(device_data)
+        devices.append(schemas.Device.model_validate(device_data))
         
     return devices
 
 
-@router.post("/me/masks", response_model=schemas.Mask, status_code=status.HTTP_201_CREATED)
+@router.post("/me/masks", response_model=schemas.Mask, status_code=status.HTTP_201_CREATED, response_model_by_alias=False)
 def add_a_mask(
     *,
     mask_in: schemas.MaskCreate,
@@ -165,7 +165,7 @@ def add_a_mask(
     user_uid = current_user["uid"]
     masks_ref = db.collection("customers").document(user_uid).collection("masks")
 
-    mask_data = mask_in.model_dump()
+    mask_data = mask_in.model_dump(by_alias=True)
     mask_data["addedDate"] = datetime.now(timezone.utc)
 
     _update_time, new_mask_ref = masks_ref.add(mask_data)
@@ -174,10 +174,10 @@ def add_a_mask(
     response_data = new_mask_doc.to_dict()
     response_data["maskId"] = new_mask_doc.id
 
-    return response_data
+    return schemas.Mask.model_validate(response_data)
 
 
-@router.get("/me/masks", response_model=List[schemas.Mask])
+@router.get("/me/masks", response_model=List[schemas.Mask], response_model_by_alias=False)
 def get_my_masks(current_user: Dict = Depends(get_current_user)):
     """
     Retrieve a list of all masks for the authenticated patient.
@@ -190,12 +190,12 @@ def get_my_masks(current_user: Dict = Depends(get_current_user)):
     for doc in masks_ref.stream():
         mask_data = doc.to_dict()
         mask_data["maskId"] = doc.id
-        masks.append(mask_data)
+        masks.append(schemas.Mask.model_validate(mask_data))
         
     return masks
 
 
-@router.post("/me/airTubing", response_model=schemas.AirTubing, status_code=status.HTTP_201_CREATED)
+@router.post("/me/airTubing", response_model=schemas.AirTubing, status_code=status.HTTP_201_CREATED, response_model_by_alias=False)
 def add_air_tubing(
     *,
     tubing_in: schemas.AirTubingCreate,
@@ -208,7 +208,7 @@ def add_air_tubing(
     user_uid = current_user["uid"]
     tubing_ref = db.collection("customers").document(user_uid).collection("airTubing")
 
-    tubing_data = tubing_in.model_dump()
+    tubing_data = tubing_in.model_dump(by_alias=True)
     tubing_data["addedDate"] = datetime.now(timezone.utc)
 
     _update_time, new_tubing_ref = tubing_ref.add(tubing_data)
@@ -217,10 +217,10 @@ def add_air_tubing(
     response_data = new_tubing_doc.to_dict()
     response_data["tubingId"] = new_tubing_doc.id
 
-    return response_data
+    return schemas.AirTubing.model_validate(response_data)
 
 
-@router.get("/me/airTubing", response_model=List[schemas.AirTubing])
+@router.get("/me/airTubing", response_model=List[schemas.AirTubing], response_model_by_alias=False)
 def get_my_air_tubing(current_user: Dict = Depends(get_current_user)):
     """
     Retrieve a list of all air tubing for the authenticated patient.
@@ -233,12 +233,12 @@ def get_my_air_tubing(current_user: Dict = Depends(get_current_user)):
     for doc in tubing_ref.stream():
         tubing_data = doc.to_dict()
         tubing_data["tubingId"] = doc.id
-        tubes.append(tubing_data)
+        tubes.append(schemas.AirTubing.model_validate(tubing_data))
         
     return tubes
 
 
-@router.post("/me/link-device", response_model=schemas.Customer, status_code=status.HTTP_200_OK)
+@router.post("/me/link-device", response_model=schemas.Customer, status_code=status.HTTP_200_OK, response_model_by_alias=False)
 def link_device_to_profile(
     *,
     link_request: schemas.DeviceLinkRequest,
@@ -262,14 +262,14 @@ def link_device_to_profile(
     # This requires a composite index in Firestore on (serialNumber, status).
     device_query = db.collection_group("devices").where(
         filter=And([
-            FieldFilter("serialNumber", "==", link_request.serialNumber),
-            FieldFilter("status", "==", "unlink")
+            FieldFilter("serialNumber", "==", link_request.serial_number),
+            FieldFilter("status", "==", "unlinked")
         ])
     ).limit(1)
     try:
         device_docs = list(device_query.stream())
     except Exception as e:
-        logging.error(f"Firestore query for device SN {link_request.serialNumber} failed: {e}")
+        logging.error(f"Firestore query for device SN {link_request.serial_number} failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="A database error occurred while searching for the device."
@@ -285,7 +285,7 @@ def link_device_to_profile(
     found_device_doc = device_docs[0]
     device_data = found_device_doc.to_dict()
 
-    logging.info(f"Found device doc with ID: {found_device_doc.id} for SN: {link_request.serialNumber}. Data: {device_data}")
+    logging.info(f"Found device doc with ID: {found_device_doc.id} for SN: {link_request.serial_number}. Data: {device_data}")
     # The device doc's parent is the 'devices' collection, whose parent is the customer document.
     pre_existing_customer_ref = found_device_doc.reference.parent.parent
 
@@ -307,7 +307,7 @@ def link_device_to_profile(
 
 
     if not pre_existing_customer_doc.exists:
-        logging.error(f"Device {found_device_doc.id} found for SN {link_request.serialNumber}, but parent customer {pre_existing_customer_ref.id} does not exist.")
+        logging.error(f"Device {found_device_doc.id} found for SN {link_request.serial_number}, but parent customer {pre_existing_customer_ref.id} does not exist.")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="A device was found, but its associated patient profile is missing."
@@ -377,8 +377,8 @@ def link_device_to_profile(
         # This combines data from the found device and the link request.
         new_device_data = {
             "deviceName": device_data.get("deviceName", "Unknown Device"),
-            "serialNumber": link_request.serialNumber,
-            "deviceNumber": link_request.deviceNumber,
+            "serialNumber": link_request.serial_number,
+            "deviceNumber": link_request.device_number,
             "status": device_data.get("status", "Active"),
             "settings": device_data.get("settings"),
             "addedDate": datetime.now(timezone.utc)
@@ -400,9 +400,9 @@ def link_device_to_profile(
 
     response_data = updated_doc.to_dict()
     response_data["patientId"] = updated_doc.id
-    return response_data
+    return schemas.Customer.model_validate(response_data)
 
-@router.post("/me/dailyReports", response_model=schemas.DailyReport, status_code=status.HTTP_201_CREATED)
+@router.post("/me/dailyReports", response_model=schemas.DailyReport, status_code=status.HTTP_201_CREATED, response_model_by_alias=False)
 def submit_daily_report(
     *,
     report_in: schemas.DailyReportCreate,
@@ -413,10 +413,10 @@ def submit_daily_report(
     """
     db = firestore.client()
     user_uid = current_user["uid"]
-    report_id = report_in.reportDate.strftime('%Y-%m-%d')
+    report_id = report_in.report_date.strftime('%Y-%m-%d')
     report_ref = db.collection("customers").document(user_uid).collection("dailyReports").document(report_id)
 
-    report_data = report_in.model_dump()
+    report_data = report_in.model_dump(by_alias=True)
     # Convert date object to datetime object for Firestore compatibility
     if isinstance(report_data.get("reportDate"), date):
         report_data["reportDate"] = datetime.combine(report_data["reportDate"], datetime.min.time())
@@ -434,10 +434,10 @@ def submit_daily_report(
 
     response_data = new_report_doc.to_dict()
     response_data["reportId"] = new_report_doc.id
-    return response_data
+    return schemas.DailyReport.model_validate(response_data)
 
 
-@router.get("/me/dailyReports", response_model=List[schemas.DailyReport])
+@router.get("/me/dailyReports", response_model=List[schemas.DailyReport], response_model_by_alias=False)
 def get_my_daily_reports(
     limit: int = Query(30, ge=1, le=100),
     current_user: Dict = Depends(get_current_user)
@@ -455,6 +455,6 @@ def get_my_daily_reports(
     for doc in query.stream():
         report_data = doc.to_dict()
         report_data["reportId"] = doc.id
-        reports.append(report_data)
+        reports.append(schemas.DailyReport.model_validate(report_data))
         
     return reports

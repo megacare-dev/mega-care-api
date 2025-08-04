@@ -13,7 +13,7 @@ This phase focuses on implementing the essential features for the patient-facing
   - [x] Checks if a customer profile for this UID already exists (return 409 Conflict).
   - [x] Creates a new document in the `customers` collection using the user's Firebase UID as the document ID.
   - [x] Stores all profile data, including the `lineId` to link the LINE account to the Firebase account.
-  - [x] Adds `createDate` with the current timestamp.
+  - [x] Adds `setupDate` with the current timestamp.
   - [x] Returns the newly created customer data.
 - [x] **Implement `GET /customers/me` (Get Profile):**
   - [x] Connect to Firestore.

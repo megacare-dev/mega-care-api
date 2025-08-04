@@ -7,7 +7,7 @@ from app.dependencies.auth import get_current_user
 
 router = APIRouter()
 
-@router.get("/patients", response_model=List[schemas.Customer])
+@router.get("/patients", response_model=List[schemas.Customer], response_model_by_alias=False)
 def get_assigned_patients(current_user: Dict = Depends(get_current_user)):
     """
     Retrieves a list of summary profiles for all patients assigned to the
@@ -38,11 +38,11 @@ def get_assigned_patients(current_user: Dict = Depends(get_current_user)):
         if customer_doc.exists:
             customer_data = customer_doc.to_dict()
             customer_data["patientId"] = customer_doc.id
-            patients.append(customer_data)
+            patients.append(schemas.Customer.model_validate(customer_data))
     
     return patients
 
-@router.get("/patients/{patientId}", response_model=schemas.Customer)
+@router.get("/patients/{patientId}", response_model=schemas.Customer, response_model_by_alias=False)
 def get_patient_profile(
     patientId: str,
     current_user: Dict = Depends(get_current_user)
@@ -76,9 +76,9 @@ def get_patient_profile(
     
     response_data = customer_doc.to_dict()
     response_data["patientId"] = customer_doc.id
-    return response_data
+    return schemas.Customer.model_validate(response_data)
 
-@router.get("/patients/{patientId}/dailyReports", response_model=List[schemas.DailyReport])
+@router.get("/patients/{patientId}/dailyReports", response_model=List[schemas.DailyReport], response_model_by_alias=False)
 def get_patient_daily_reports(
     patientId: str,
     limit: int = Query(30, ge=1, le=100),
@@ -110,7 +110,7 @@ def get_patient_daily_reports(
     for doc in query.stream():
         report_data = doc.to_dict()
         report_data["reportId"] = doc.id
-        reports.append(report_data)
+        reports.append(schemas.DailyReport.model_validate(report_data))
 
     if not reports:
         # It's better to return an empty list than a 404 if the patient exists but has no reports.
