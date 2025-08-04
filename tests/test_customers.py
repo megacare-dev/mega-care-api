@@ -60,7 +60,7 @@ def test_create_customer_profile_success(mock_firestore_client):
         "dob": datetime(1992, 5, 20, 0, 0),
         "phoneNumber": "0812345678",
         "status": "Active",
-        "createDate": datetime.now(timezone.utc), # The exact value is set in the endpoint
+        "setupDate": datetime.now(timezone.utc), # The exact value is set in the endpoint
         "lineProfile": None
     }
     mock_doc_existent.to_dict.return_value = expected_db_data
@@ -96,8 +96,8 @@ def test_create_customer_profile_success(mock_firestore_client):
     assert data_sent_to_firestore["phoneNumber"] == "0812345678"
     assert "merge" not in call_kwargs
     assert data_sent_to_firestore["dob"] == datetime(1992, 5, 20, 0, 0) # type: ignore
-    assert "createDate" in data_sent_to_firestore # type: ignore
-    assert isinstance(data_sent_to_firestore["createDate"], datetime) # type: ignore
+    assert "setupDate" in data_sent_to_firestore # type: ignore
+    assert isinstance(data_sent_to_firestore["setupDate"], datetime) # type: ignore
     
     # Verify the response payload
     response_data = response.json()
@@ -106,7 +106,7 @@ def test_create_customer_profile_success(mock_firestore_client):
     # Pydantic model `Customer` has `dob: date`, so FastAPI serializes it back to a string
     assert response_data["dob"] == "1992-05-20"
     assert response_data["phone_number"] == "0812345678"
-    assert "create_date" in response_data
+    assert "setup_date" in response_data
 
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
@@ -159,7 +159,7 @@ def test_get_my_profile_success(mock_firestore_client):
         "displayName": "Paripol Tester", "firstName": "Paripol", "lastName": "Tester",
         "dob": datetime(1992, 5, 20, 0, 0), "status": "Active",
         "phoneNumber": "0898765432",
-        "createDate": datetime(2023, 1, 1, 12, 0, 0),
+        "setupDate": datetime(2023, 1, 1, 12, 0, 0),
         "lineProfile": None
     }
     mock_doc.to_dict.return_value = db_data
@@ -175,7 +175,7 @@ def test_get_my_profile_success(mock_firestore_client):
     assert response_data["first_name"] == "Paripol"
     assert response_data["dob"] == "1992-05-20"
     assert response_data["phone_number"] == "0898765432"
-    assert response_data["create_date"] == "2023-01-01T12:00:00"
+    assert response_data["setup_date"] == "2023-01-01T12:00:00"
 
 
 @patch('app.api.v1.endpoints.customers.firestore.client')
@@ -548,7 +548,7 @@ def test_link_device_preserves_line_profile(mock_firestore_client):
     pre_existing_customer_data = {
         "displayName": "John Firestore", "firstName": "John", "lastName": "Firestore",
         "dob": datetime(1985, 6, 15, 0, 0), "status": "Active",
-        "createDate": datetime(2023, 1, 1)
+        "setupDate": datetime(2023, 1, 1)
         # This pre-existing profile does NOT have a lineProfile
     }
     mock_pre_existing_customer_doc = MagicMock()
@@ -694,7 +694,7 @@ def test_link_device_copies_to_patients_collection(mock_firestore_client):
     pre_existing_customer_data = {
         "displayName": "Jane Firestore", "firstName": "Jane", "lastName": "Firestore",
         "dob": datetime(1985, 6, 15, 0, 0), "status": "Active",
-        "createDate": datetime(2023, 1, 1)
+        "setupDate": datetime(2023, 1, 1)
     }
     mock_pre_existing_customer_doc = MagicMock()
     mock_pre_existing_customer_doc.exists = True

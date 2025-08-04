@@ -57,7 +57,7 @@ def test_get_assigned_patients_success(mock_firestore_client):
         "firstName": "Patient",
         "lastName": "One",
         "dob": datetime(1990, 1, 1),
-        "createDate": datetime.now(),
+        "setupDate": datetime.now(),
         "status": "Active",
         "lineProfile": None
     }
@@ -70,7 +70,7 @@ def test_get_assigned_patients_success(mock_firestore_client):
     mock_patient_doc_2.to_dict.return_value = {
         "displayName": "Patient Two", "firstName": "Patient",
         "lastName": "Two", "dob": datetime(1991, 2, 2),
-        "createDate": datetime.now(), "status": "Active", "lineProfile": None
+        "setupDate": datetime.now(), "status": "Active", "lineProfile": None
     }
     mock_patient_ref_2 = MagicMock()
     mock_patient_ref_2.get.return_value = mock_patient_doc_2

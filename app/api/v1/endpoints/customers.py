@@ -47,7 +47,7 @@ def create_customer_profile(
             detail="A 'displayName' or both 'firstName' and 'lastName' are required to create a profile."
         )
 
-    customer_data["createDate"] = datetime.now(timezone.utc)
+    customer_data["setupDate"] = datetime.now(timezone.utc)
 
     # Convert date object to datetime object for Firestore compatibility
     if isinstance(customer_data.get("dob"), date):
